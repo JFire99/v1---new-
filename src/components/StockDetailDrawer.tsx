@@ -1,5 +1,4 @@
 import React from 'react';
-import { ExternalLink } from 'lucide-react';
 import type { StockData } from '../types/scanner';
 import type { NewsArticle } from '../types/news';
 import { PriceReactionDisplay } from './NewsCard';
@@ -14,8 +13,6 @@ interface StockDetailDrawerProps {
   getFreshnessConfig: (freshness?: string) => { label: string; icon: string; className: string; title: string };
   getTriggerClass: (trigger: string) => string;
 }
-
-const trading212Url = (symbol: string) => `https://www.trading212.com/trading-instruments/invest/${encodeURIComponent(symbol.toUpperCase())}.US`;
 
 export const StockDetailDrawer: React.FC<StockDetailDrawerProps> = ({
   symbol,
@@ -45,16 +42,6 @@ export const StockDetailDrawer: React.FC<StockDetailDrawerProps> = ({
         </div>
 
         <div className="drawer-body">
-          <div className="drawer-trade-panel">
-            <div>
-              <b>Ready to view {symbol}?</b>
-              <span>Open the instrument in Trading 212 for manual review and order placement.</span>
-            </div>
-            <a href={trading212Url(symbol)} target="_blank" rel="noopener noreferrer" className="drawer-trade-button">
-              <ExternalLink size={14} /> Trading 212
-            </a>
-          </div>
-
           <div>
             <div className="drawer-section-title">MOMENTUM & LIQUIDITY SNAPSHOT</div>
             <div className="drawer-metrics">
