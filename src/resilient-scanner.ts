@@ -38,14 +38,8 @@ export class ResilientScanner extends Scanner {
       console.error('[JFIRE] Universe load error:', err?.message || err);
     }
 
-    // REST snapshots are always started. WebSocket is optional and may be
-    // unavailable because the Alpaca account already has its allowed stream.
     this.connectResilientWs();
     void this.scan();
-
-    // Keep REST snapshot scanning active even when the WebSocket is blocked.
-    // The scanner batches 100 symbols per request, so this cadence stays well
-    // below Alpaca Basic's documented 200 historical/API requests per minute.
     this.resilientScanTimer = setInterval(() => void this.scan(), 30000);
     this.resilientClockTimer = setInterval(() => void this.updateClock(), 30000);
     this.resilientRotateTimer = setInterval(() => (this as any).rotate(), 30000);
@@ -77,6 +71,27 @@ export class ResilientScanner extends Scanner {
     super.stop();
   }
 
+  /** Return the selected stock's rolling price/minute-volume history. */
+  public getStockLiveDetail(symbol: string) {
+    const sym = String(symbol || '').toUpperCase();
+    const stocks = (this as any).stocks as Map<string, any> | undefined;
+    const s = stocks?.get(sym);
+    if (!s) return null;
+
+    const history = Array.isArray(s.history)
+      ? s.history.slice(-60).map((pt: any) => ({ t: pt.t, p: pt.p, v: pt.v }))
+      : [];
+
+    return {
+      symbol: sym,
+      history,
+      minuteVolume: typeof s.minuteVolume === 'number' ? s.minuteVolume : null,
+      volumeAcceleration: typeof s.volumeAcceleration === 'number' ? s.volumeAcceleration : null,
+      lastWsTime: typeof s.lastWsTime === 'number' ? s.lastWsTime : null,
+      live: typeof s.lastWsTime === 'number' && Date.now() - s.lastWsTime <= 90000,
+    };
+  }
+
   public override async updateClock() {
     try {
       const data = await (this as any).get('https://paper-api.alpaca.markets/v2/clock');
@@ -99,14 +114,12 @@ export class ResilientScanner extends Scanner {
     const previousSession = this.sessionInfo.session;
     this.sessionInfo = getMarketSession(
       new Date(),
-      this.calendarHolidays,
+      (this as any).calendarHolidays,
       (this as any).feed
     );
 
     if (this.sessionInfo.session !== previousSession) {
-      console.log(
-        `[JFIRE] Market session changed: ${previousSession} -> ${this.sessionInfo.session}`
-      );
+      console.log(`[JFIRE] Market session changed: ${previousSession} -> ${this.sessionInfo.session}`);
       this.resilientBlocked = false;
       this.resilientAttempt = 0;
       this.connectResilientWs();
@@ -126,9 +139,7 @@ export class ResilientScanner extends Scanner {
         : `wss://stream.data.alpaca.markets/v2/${feed}`;
 
     if (this.resilientWs) {
-      try {
-        this.resilientWs.close();
-      } catch {}
+      try { this.resilientWs.close(); } catch {}
       this.resilientWs = null;
     }
 
@@ -137,38 +148,27 @@ export class ResilientScanner extends Scanner {
       this.resilientReconnectTimer = null;
     }
 
-    console.log(
-      `[JFIRE] Connecting WebSocket to ${targetUrl} (session: ${this.sessionInfo.session})`
-    );
+    console.log(`[JFIRE] Connecting WebSocket to ${targetUrl} (session: ${this.sessionInfo.session})`);
 
     const ws = new WebSocket(targetUrl);
     this.resilientWs = ws;
     (this as any).ws = ws;
 
     ws.on('open', () => {
-      ws.send(
-        JSON.stringify({
-          action: 'auth',
-          key: (this as any).key,
-          secret: (this as any).secret,
-        })
-      );
+      ws.send(JSON.stringify({ action: 'auth', key: (this as any).key, secret: (this as any).secret }));
     });
 
     ws.on('message', (data) => {
       try {
         const messages = JSON.parse(data.toString());
         const list = Array.isArray(messages) ? messages : [messages];
-
         for (const message of list) {
           if (message?.T === 'error' && Number(message.code) === 406) {
             (this as any).handleWsMessage(message);
             this.handleConnectionLimit(ws, 'stock');
             continue;
           }
-
           (this as any).handleWsMessage(message);
-
           if (message?.T === 'success' && message.msg === 'authenticated') {
             this.resilientBlocked = false;
             this.resilientAttempt = 0;
@@ -189,9 +189,7 @@ export class ResilientScanner extends Scanner {
       this.resilientWs = null;
       (this as any).ws = null;
       (this as any).auth = false;
-
       if (this.resilientStopping || this.resilientBlocked) return;
-
       this.resilientReconnectTimer = setTimeout(() => {
         this.resilientReconnectTimer = null;
         this.connectResilientWs();
@@ -201,29 +199,19 @@ export class ResilientScanner extends Scanner {
 
   private handleConnectionLimit(ws: WebSocket, stream: 'stock') {
     if (this.resilientStopping) return;
-
-    // 406 is not a reason to stop the scanner. REST snapshot scanning remains
-    // active; simply pause WS reconnects so we do not hammer the same limit.
     this.resilientBlocked = true;
     if (this.resilientReconnectTimer) {
       clearTimeout(this.resilientReconnectTimer);
       this.resilientReconnectTimer = null;
     }
-
     const delayMs = Math.min(300000, 60000 * 2 ** this.resilientAttempt);
     this.resilientAttempt += 1;
-
-    console.warn(
-      `[JFIRE] Alpaca ${stream} WebSocket connection limit (406). ` +
-        `REST snapshot scanning remains active. WS retry in ${Math.round(delayMs / 1000)}s.`
-    );
-
+    console.warn(`[JFIRE] Alpaca ${stream} WebSocket connection limit (406). REST snapshot scanning remains active. WS retry in ${Math.round(delayMs / 1000)}s.`);
     try {
       if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
         ws.close(1000, 'Alpaca connection limit');
       }
     } catch {}
-
     this.resilientReconnectTimer = setTimeout(() => {
       this.resilientReconnectTimer = null;
       if (this.resilientStopping) return;
