@@ -1,5 +1,5 @@
 import WebSocket from 'ws';
-import { NewsEngine, type StockSnapshotForNews } from './news-engine';
+import { NewsEngine } from './news-engine';
 
 /**
  * NewsEngine wrapper that preserves the existing news parsing/reaction logic
