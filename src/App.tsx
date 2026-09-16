@@ -3,7 +3,6 @@ import {
   Activity,
   ArrowUpRight,
   Clock,
-  Download,
   ExternalLink,
   Newspaper,
   Settings as SettingsIcon,
@@ -30,13 +29,6 @@ const pct = (x: number | null | undefined) => {
 const money = (x: number | null | undefined) => {
   if (x === null || x === undefined || !Number.isFinite(x) || x <= 0) return '—';
   return `$${x < 1 ? x.toFixed(4) : x.toFixed(2)}`;
-};
-
-const compact = (x: number | null | undefined) => {
-  if (!x || !Number.isFinite(x)) return '0';
-  if (x >= 1e6) return `${(x / 1e6).toFixed(2)}M`;
-  if (x >= 1e3) return `${Math.round(x / 1e3)}K`;
-  return String(Math.round(x));
 };
 
 const getSignalClass = (signal?: string) => {
@@ -67,7 +59,9 @@ const getTriggerClass = (trigger: string) => {
   return '';
 };
 
-const trading212Url = (symbol: string) => `https://www.trading212.com/trading-instruments/invest/${encodeURIComponent(symbol.toUpperCase())}.US`;
+// Open the Trading 212 web app so the user's existing logged-in UK session is used.
+// We intentionally do not send the user to a generic marketing/instrument URL.
+const trading212Url = 'https://app.trading212.com/';
 
 export default function App() {
   const [stocks, setStocks] = useState<StockData[]>([]);
@@ -99,14 +93,13 @@ export default function App() {
   useEffect(() => {
     const tick = () => {
       const now = new Date();
-      const fmt = (timeZone: string) =>
-        now.toLocaleTimeString('en-GB', {
-          timeZone,
-          hour12: false,
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-        });
+      const fmt = (timeZone: string) => now.toLocaleTimeString('en-GB', {
+        timeZone,
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      });
       setUkTime(`${fmt('Europe/London')} UK`);
       setEtTime(`${fmt('America/New_York')} ET`);
     };
@@ -226,7 +219,7 @@ export default function App() {
       return (b.dailyChange ?? 0) - (a.dailyChange ?? 0);
     });
 
-    return candidates.slice(0, 7);
+    return candidates.slice(0, 10);
   }, [stocks, settings]);
 
   const selectedStock = useMemo(
@@ -239,26 +232,15 @@ export default function App() {
     return newsArticles.filter((article) => article.symbols?.some((s) => s.toUpperCase() === selectedStockSymbol.toUpperCase()));
   }, [newsArticles, selectedStockSymbol]);
 
-  const exportCSV = () => {
-    const header = 'Rank,Symbol,Price,DailyChangePct,5mChangePct,1mChangePct,RVOL,Volume,DollarVolume,DayHigh,Score,Triggers\n';
-    const body = rows.map((s, i) => `${i + 1},${s.symbol},${s.price},${s.dailyChange ?? ''},${s.fiveMinuteChange ?? ''},${s.oneMinuteChange ?? ''},${s.relativeVolume ?? ''},${s.volume},${s.dollarVolume},${s.dayHigh},${s.score},"${s.triggers.join('; ')}"`).join('\n');
-    const blob = new Blob([header + body], { type: 'text/csv' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `jfire_top7_momentum_${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  };
-
   const openStock = (symbol: string) => setSelectedStockSymbol(symbol);
-  const openTrading212 = (symbol: string) => window.open(trading212Url(symbol), '_blank', 'noopener,noreferrer');
+  const openTrading212 = () => window.open(trading212Url, '_blank', 'noopener,noreferrer');
 
   return (
     <div className="app" id="app-container">
       <header className="app-header">
         <div className="brand-block">
           <div className="brand-line"><span className="brand-mark">JF</span><b>JFIRE MOMENTUM</b></div>
-          <small>TOP 7 US EQUITY MOMENTUM SCANNER</small>
+          <small>TOP 10 US EQUITY MOMENTUM SCANNER</small>
         </div>
 
         <div className="clocks">
@@ -276,13 +258,12 @@ export default function App() {
         <section className="hero-bar">
           <div>
             <div className="hero-title"><Zap size={18} /> Momentum Leaders</div>
-            <div className="hero-subtitle">Only the 7 strongest stocks currently moving UP with momentum are shown.</div>
+            <div className="hero-subtitle">Only the 10 strongest stocks currently moving UP with momentum are shown.</div>
           </div>
           <div className="toolbar-actions">
-            <button onClick={() => setCat('momentum')} className={cat === 'momentum' ? 'active' : ''}><Activity size={13} /> Top 7 Momentum</button>
+            <button onClick={() => setCat('momentum')} className={cat === 'momentum' ? 'active' : ''}><Activity size={13} /> Top 10 Momentum</button>
             <button onClick={() => setCat('news')} className={cat === 'news' ? 'active' : ''}><Newspaper size={13} /> Live News</button>
             <button onClick={() => setShowSettings(true)}><SettingsIcon size={13} /> Settings</button>
-            <button onClick={exportCSV}><Download size={13} /> Export 7</button>
           </div>
         </section>
 
@@ -293,7 +274,7 @@ export default function App() {
           </div>
           <span>{status.universeSize.toLocaleString()} common stocks</span>
           <span>{status.stocksTracked.toLocaleString()} tracked</span>
-          <span>{rows.length}/7 momentum leaders</span>
+          <span>{rows.length}/10 momentum leaders</span>
           <span>{lastRestUpdate ? `Last update ${lastRestUpdate.toLocaleTimeString('en-GB', { hour12: false })} UK` : 'Waiting for data'}</span>
           <span className="status-next">Next: {sessionInfo.nextTransition.targetBadge} {sessionInfo.nextTransition.countdownFormatted}</span>
         </section>
@@ -310,8 +291,8 @@ export default function App() {
         ) : (
           <section className="leaderboard">
             <div className="leaderboard-head">
-              <div><b>TOP 7 MOMENTUM</b><span>Real market data · positive daily momentum · liquidity filtered</span></div>
-              <span className="leader-count">{rows.length} / 7</span>
+              <div><b>TOP 10 MOMENTUM</b><span>Real market data · positive daily momentum · liquidity filtered</span></div>
+              <span className="leader-count">{rows.length} / 10</span>
             </div>
 
             {rows.length === 0 ? (
@@ -345,7 +326,7 @@ export default function App() {
                       <div className="metric"><span>SCORE</span><b className="score">{s.score}</b></div>
                       <div className="row-actions" onClick={(e) => e.stopPropagation()}>
                         <button className="news-button" onClick={() => openStock(s.symbol)} title="Open stock details and news"><Newspaper size={13} /> News</button>
-                        <button className="trade-button" onClick={() => openTrading212(s.symbol)} title="Open this stock in Trading 212"><ArrowUpRight size={13} /> Trading 212</button>
+                        <button className="trade-button" onClick={openTrading212} title="Open your logged-in Trading 212 app"><ArrowUpRight size={13} /> Trading 212</button>
                       </div>
                     </article>
                   );
@@ -358,7 +339,7 @@ export default function App() {
         <div className="footer-note">
           <span>Real market data only — no demo stocks.</span>
           <span>Signal scanner only — Trading 212 opens for manual review/order placement.</span>
-          <a href="https://www.trading212.com/" target="_blank" rel="noopener noreferrer">Trading 212 ↗</a>
+          <a href={trading212Url} target="_blank" rel="noopener noreferrer">Trading 212 ↗</a>
         </div>
       </main>
 
