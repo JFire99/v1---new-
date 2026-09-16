@@ -36,6 +36,7 @@ export interface StockData {
   previousDailyVolume?: number | null;
   relativeVolume: number | null;
   volumeAcceleration?: number | null;
+  minuteVolume?: number | null;
   dayHigh: number;
   distanceFromHigh: number | null;
   score: number;
@@ -45,6 +46,21 @@ export interface StockData {
   newsCount?: number;
   hasRecentNews?: boolean;
   lastUpdate: string;
+}
+
+export interface LivePricePoint {
+  t: number;
+  p: number;
+  v?: number;
+}
+
+export interface StockLiveDetail {
+  symbol: string;
+  history: LivePricePoint[];
+  minuteVolume: number | null;
+  volumeAcceleration: number | null;
+  lastWsTime: number | null;
+  live: boolean;
 }
 
 export interface MarketClock {
