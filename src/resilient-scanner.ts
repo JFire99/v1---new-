@@ -3,9 +3,12 @@ import { getMarketSession } from './market-session';
 import { Scanner } from './scanner-engine';
 
 /**
- * Scanner wrapper that keeps the existing scanner/data architecture but makes
- * Alpaca connection-limit (406) responses safe. A 406 is an account/session
- * limit, not a transient network failure, so it must not enter the 5s retry loop.
+ * Scanner wrapper that keeps REST snapshot scanning alive when Alpaca refuses
+ * the market-data WebSocket with 406 (connection limit exceeded).
+ *
+ * REST snapshots remain the scanner's primary fallback data source. The
+ * WebSocket is an enhancement for lower-latency updates, not a prerequisite
+ * for the scanner to operate.
  */
 export class ResilientScanner extends Scanner {
   private resilientWs: WebSocket | null = null;
@@ -21,6 +24,7 @@ export class ResilientScanner extends Scanner {
   public override async start() {
     this.resilientStopping = false;
     this.resilientBlocked = false;
+    this.resilientAttempt = 0;
 
     try {
       await this.updateClock();
@@ -34,10 +38,15 @@ export class ResilientScanner extends Scanner {
       console.error('[JFIRE] Universe load error:', err?.message || err);
     }
 
+    // REST snapshots are always started. WebSocket is optional and may be
+    // unavailable because the Alpaca account already has its allowed stream.
     this.connectResilientWs();
     void this.scan();
 
-    this.resilientScanTimer = setInterval(() => void this.scan(), 60000);
+    // Keep REST snapshot scanning active even when the WebSocket is blocked.
+    // The scanner batches 100 symbols per request, so this cadence stays well
+    // below Alpaca Basic's documented 200 historical/API requests per minute.
+    this.resilientScanTimer = setInterval(() => void this.scan(), 30000);
     this.resilientClockTimer = setInterval(() => void this.updateClock(), 30000);
     this.resilientRotateTimer = setInterval(() => (this as any).rotate(), 30000);
     this.resilientDiagnosticTimer = setInterval(() => (this as any).logDiagnostics(), 15000);
@@ -98,6 +107,8 @@ export class ResilientScanner extends Scanner {
       console.log(
         `[JFIRE] Market session changed: ${previousSession} -> ${this.sessionInfo.session}`
       );
+      this.resilientBlocked = false;
+      this.resilientAttempt = 0;
       this.connectResilientWs();
       void this.scan();
     }
@@ -161,6 +172,7 @@ export class ResilientScanner extends Scanner {
           if (message?.T === 'success' && message.msg === 'authenticated') {
             this.resilientBlocked = false;
             this.resilientAttempt = 0;
+            console.log('[JFIRE] Stock WebSocket authenticated; using WS + REST data.');
           }
         }
       } catch (err: any) {
@@ -190,6 +202,8 @@ export class ResilientScanner extends Scanner {
   private handleConnectionLimit(ws: WebSocket, stream: 'stock') {
     if (this.resilientStopping) return;
 
+    // 406 is not a reason to stop the scanner. REST snapshot scanning remains
+    // active; simply pause WS reconnects so we do not hammer the same limit.
     this.resilientBlocked = true;
     if (this.resilientReconnectTimer) {
       clearTimeout(this.resilientReconnectTimer);
@@ -201,7 +215,7 @@ export class ResilientScanner extends Scanner {
 
     console.warn(
       `[JFIRE] Alpaca ${stream} WebSocket connection limit (406). ` +
-        `Reconnect paused for ${Math.round(delayMs / 1000)}s.`
+        `REST snapshot scanning remains active. WS retry in ${Math.round(delayMs / 1000)}s.`
     );
 
     try {
