@@ -1,0 +1,6 @@
+{
+  "name": "JFire Momentum Scanner",
+  "description": "Real-time US equity momentum scanner with live Alpaca market data integration",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
