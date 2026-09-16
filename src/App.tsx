@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Activity,
-  ArrowUpRight,
   Clock,
-  ExternalLink,
+  Filter,
   Newspaper,
-  Settings as SettingsIcon,
+  Search,
   Wifi,
   WifiOff,
   Zap,
@@ -14,12 +13,24 @@ import './App.css';
 import type { ScannerSettings, StockData, ScannerStatus } from './types/scanner';
 import { DEFAULT_SETTINGS } from './types/scanner';
 import type { NewsArticle, NewsEngineStatus } from './types/news';
-import { SettingsPanel } from './components/SettingsPanel';
 import { NewsPanel } from './components/NewsPanel';
 import { StockDetailDrawer } from './components/StockDetailDrawer';
 import { getMarketSession } from './market-session';
 
 type Category = 'momentum' | 'news';
+
+type FilterState = {
+  search: string;
+  minPrice: number;
+  maxPrice: number;
+  minVolume: number;
+  maxVolume: number | null;
+  minDaily: number;
+  min5m: number;
+  min1m: number;
+  minRvol: number;
+  minScore: number;
+};
 
 const pct = (x: number | null | undefined) => {
   if (x === null || x === undefined || !Number.isFinite(x)) return '—';
@@ -59,9 +70,40 @@ const getTriggerClass = (trigger: string) => {
   return '';
 };
 
-// Open the Trading 212 web app so the user's existing logged-in UK session is used.
-// We intentionally do not send the user to a generic marketing/instrument URL.
-const trading212Url = 'https://app.trading212.com/';
+const defaultFilters = (settings: ScannerSettings): FilterState => ({
+  search: '',
+  minPrice: settings.minPrice,
+  maxPrice: settings.maxPrice,
+  minVolume: settings.minVolume,
+  maxVolume: null,
+  minDaily: 0,
+  min5m: 0,
+  min1m: 0,
+  minRvol: 0,
+  minScore: 0,
+});
+
+const inputNumber = (value: string, fallback: number | null) => {
+  if (value.trim() === '') return fallback;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const activeMomentumRank = (stock: StockData) => {
+  const one = Math.max(stock.oneMinuteChange ?? 0, 0);
+  const five = Math.max(stock.fiveMinuteChange ?? 0, 0);
+  const rvol = Math.max(stock.relativeVolume ?? 0, 0);
+  const daily = Math.min(Math.max(stock.dailyChange ?? 0, 0), 50);
+  const volumeAcceleration = Math.min(Math.max(stock.volumeAcceleration ?? 0, 0), 20);
+  const triggerBonus = stock.triggers.reduce((bonus, trigger) => {
+    if (/SURGE|BREAKOUT|HIGH/i.test(trigger)) return bonus + 4;
+    if (/RVOL|VOLUME/i.test(trigger)) return bonus + 2;
+    return bonus;
+  }, 0);
+
+  // Short-term movement is deliberately weighted much more heavily than the daily move.
+  return one * 8 + five * 5 + Math.min(rvol, 20) * 0.75 + volumeAcceleration * 0.5 + daily * 0.15 + triggerBonus;
+};
 
 export default function App() {
   const [stocks, setStocks] = useState<StockData[]>([]);
@@ -76,8 +118,9 @@ export default function App() {
     alertCount: 0,
   });
   const [settings, setSettings] = useState<ScannerSettings>(DEFAULT_SETTINGS);
+  const [filters, setFilters] = useState<FilterState>(defaultFilters(DEFAULT_SETTINGS));
   const [cat, setCat] = useState<Category>('momentum');
-  const [showSettings, setShowSettings] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(true);
   const [selectedStockSymbol, setSelectedStockSymbol] = useState<string | null>(null);
   const [newsArticles, setNewsArticles] = useState<NewsArticle[]>([]);
   const [newsStatus, setNewsStatus] = useState<NewsEngineStatus>({
@@ -121,7 +164,15 @@ export default function App() {
       .then((data) => {
         if (data && typeof data === 'object') {
           setStatus((prev) => ({ ...prev, ...data }));
-          if (data.settings) setSettings(data.settings);
+          if (data.settings) {
+            setSettings(data.settings);
+            setFilters((prev) => ({
+              ...prev,
+              minPrice: data.settings.minPrice,
+              maxPrice: data.settings.maxPrice,
+              minVolume: data.settings.minVolume,
+            }));
+          }
         }
       })
       .catch(() => {});
@@ -189,38 +240,45 @@ export default function App() {
     return () => stream.close();
   }, []);
 
-  const handleApplySettings = (newSettings: Partial<ScannerSettings>) => {
-    const merged = { ...settings, ...newSettings };
-    setSettings(merged);
-    fetch('/api/settings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newSettings),
-    }).catch(() => {});
-  };
-
   const rows = useMemo(() => {
+    const query = filters.search.trim().toUpperCase();
+
     const candidates = stocks.filter((s) => {
-      if (!Number.isFinite(s.dailyChange ?? NaN) || (s.dailyChange ?? 0) <= 0) return false;
-      if (s.volume < settings.minVolume || s.dollarVolume < settings.minDollarVolume) return false;
-      if (s.price < settings.minPrice || s.price > settings.maxPrice) return false;
-      if (s.score <= 0) return false;
+      if (query && !s.symbol.toUpperCase().includes(query) && !(s.name || '').toUpperCase().includes(query)) return false;
+      if (!Number.isFinite(s.price) || s.price < filters.minPrice || s.price > filters.maxPrice) return false;
+      if (!Number.isFinite(s.volume) || s.volume < filters.minVolume) return false;
+      if (filters.maxVolume !== null && s.volume > filters.maxVolume) return false;
+      if (!Number.isFinite(s.dailyChange ?? NaN) || (s.dailyChange ?? 0) < filters.minDaily) return false;
+      if ((s.relativeVolume ?? 0) < filters.minRvol) return false;
+      if (s.score < filters.minScore) return false;
+
+      const one = s.oneMinuteChange;
+      const five = s.fiveMinuteChange;
+      const hasPositiveShortTerm = (one !== null && one > filters.min1m) || (five !== null && five > filters.min5m);
+      if (!hasPositiveShortTerm) return false;
+      if (one !== null && one < 0) return false;
+      if (s.freshness === 'STALE') return false;
       return true;
     });
 
     candidates.sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      const b5 = b.fiveMinuteChange ?? -999;
-      const a5 = a.fiveMinuteChange ?? -999;
-      if (b5 !== a5) return b5 - a5;
+      const bRank = activeMomentumRank(b);
+      const aRank = activeMomentumRank(a);
+      if (bRank !== aRank) return bRank - aRank;
       const b1 = b.oneMinuteChange ?? -999;
       const a1 = a.oneMinuteChange ?? -999;
       if (b1 !== a1) return b1 - a1;
+      const b5 = b.fiveMinuteChange ?? -999;
+      const a5 = a.fiveMinuteChange ?? -999;
+      if (b5 !== a5) return b5 - a5;
+      const bRvol = b.relativeVolume ?? 0;
+      const aRvol = a.relativeVolume ?? 0;
+      if (bRvol !== aRvol) return bRvol - aRvol;
       return (b.dailyChange ?? 0) - (a.dailyChange ?? 0);
     });
 
     return candidates.slice(0, 10);
-  }, [stocks, settings]);
+  }, [stocks, filters]);
 
   const selectedStock = useMemo(
     () => stocks.find((s) => s.symbol === selectedStockSymbol) || null,
@@ -233,7 +291,12 @@ export default function App() {
   }, [newsArticles, selectedStockSymbol]);
 
   const openStock = (symbol: string) => setSelectedStockSymbol(symbol);
-  const openTrading212 = () => window.open(trading212Url, '_blank', 'noopener,noreferrer');
+
+  const updateFilter = <K extends keyof FilterState>(key: K, value: FilterState[K]) => {
+    setFilters((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const resetFilters = () => setFilters(defaultFilters(settings));
 
   return (
     <div className="app" id="app-container">
@@ -258,14 +321,31 @@ export default function App() {
         <section className="hero-bar">
           <div>
             <div className="hero-title"><Zap size={18} /> Momentum Leaders</div>
-            <div className="hero-subtitle">Only the 10 strongest stocks currently moving UP with momentum are shown.</div>
+            <div className="hero-subtitle">Top 10 active upward movers first. Use the filters below to search the full tracked market.</div>
           </div>
           <div className="toolbar-actions">
             <button onClick={() => setCat('momentum')} className={cat === 'momentum' ? 'active' : ''}><Activity size={13} /> Top 10 Momentum</button>
             <button onClick={() => setCat('news')} className={cat === 'news' ? 'active' : ''}><Newspaper size={13} /> Live News</button>
-            <button onClick={() => setShowSettings(true)}><SettingsIcon size={13} /> Settings</button>
+            <button onClick={() => setFiltersOpen((open) => !open)} className={filtersOpen ? 'active' : ''}><Filter size={13} /> Filters</button>
           </div>
         </section>
+
+        {filtersOpen && (
+          <section className="scanner-filters">
+            <div className="filter-title"><Filter size={14} /><b>STOCK FILTERS</b><span>Control what can appear in the leaderboard. Changes are instant and use the real tracked data.</span></div>
+            <label className="filter-field search-field"><span>SEARCH</span><div><Search size={13} /><input value={filters.search} onChange={(e) => updateFilter('search', e.target.value)} placeholder="Ticker or company" /></div></label>
+            <label className="filter-field"><span>MIN $ PRICE</span><input type="number" min="0" step="0.01" value={filters.minPrice} onChange={(e) => updateFilter('minPrice', inputNumber(e.target.value, 0) ?? 0)} /></label>
+            <label className="filter-field"><span>MAX $ PRICE</span><input type="number" min="0" step="0.01" value={filters.maxPrice} onChange={(e) => updateFilter('maxPrice', inputNumber(e.target.value, 999999) ?? 999999)} /></label>
+            <label className="filter-field"><span>MIN VOLUME</span><input type="number" min="0" step="1000" value={filters.minVolume} onChange={(e) => updateFilter('minVolume', inputNumber(e.target.value, 0) ?? 0)} /></label>
+            <label className="filter-field"><span>MAX VOLUME</span><input type="number" min="0" step="1000" value={filters.maxVolume ?? ''} onChange={(e) => updateFilter('maxVolume', inputNumber(e.target.value, null))} placeholder="No max" /></label>
+            <label className="filter-field"><span>MIN DAY %</span><input type="number" step="0.1" value={filters.minDaily} onChange={(e) => updateFilter('minDaily', inputNumber(e.target.value, 0) ?? 0)} /></label>
+            <label className="filter-field"><span>MIN 5M %</span><input type="number" step="0.1" value={filters.min5m} onChange={(e) => updateFilter('min5m', inputNumber(e.target.value, 0) ?? 0)} /></label>
+            <label className="filter-field"><span>MIN 1M %</span><input type="number" step="0.1" value={filters.min1m} onChange={(e) => updateFilter('min1m', inputNumber(e.target.value, 0) ?? 0)} /></label>
+            <label className="filter-field"><span>MIN RVOL</span><input type="number" min="0" step="0.1" value={filters.minRvol} onChange={(e) => updateFilter('minRvol', inputNumber(e.target.value, 0) ?? 0)} /></label>
+            <label className="filter-field"><span>MIN SCORE</span><input type="number" min="0" step="1" value={filters.minScore} onChange={(e) => updateFilter('minScore', inputNumber(e.target.value, 0) ?? 0)} /></label>
+            <button className="filter-reset" onClick={resetFilters}>Reset</button>
+          </section>
+        )}
 
         <section className="status-strip">
           <div className={`data-mode ${status.connected ? 'live' : restFallbackActive ? 'rest' : 'offline'}`}>
@@ -291,12 +371,12 @@ export default function App() {
         ) : (
           <section className="leaderboard">
             <div className="leaderboard-head">
-              <div><b>TOP 10 MOMENTUM</b><span>Real market data · positive daily momentum · liquidity filtered</span></div>
+              <div><b>TOP 10 MOMENTUM</b><span>Active short-term movement · volume/RVOL · daily momentum · real data only</span></div>
               <span className="leader-count">{rows.length} / 10</span>
             </div>
 
             {rows.length === 0 ? (
-              <div className="empty-state"><Activity size={28} /><b>Waiting for upward momentum</b><span>REST snapshots are active. The leaderboard will populate when qualifying positive-momentum stocks are available.</span></div>
+              <div className="empty-state"><Activity size={28} /><b>No stocks match the current filters</b><span>Lower the price, volume, short-term momentum, RVOL or score filters, or wait for fresh upward movement.</span></div>
             ) : (
               <div className="leader-list">
                 {rows.map((s, index) => {
@@ -326,7 +406,6 @@ export default function App() {
                       <div className="metric"><span>SCORE</span><b className="score">{s.score}</b></div>
                       <div className="row-actions" onClick={(e) => e.stopPropagation()}>
                         <button className="news-button" onClick={() => openStock(s.symbol)} title="Open stock details and news"><Newspaper size={13} /> News</button>
-                        <button className="trade-button" onClick={openTrading212} title="Open your logged-in Trading 212 app"><ArrowUpRight size={13} /> Trading 212</button>
                       </div>
                     </article>
                   );
@@ -338,12 +417,10 @@ export default function App() {
 
         <div className="footer-note">
           <span>Real market data only — no demo stocks.</span>
-          <span>Signal scanner only — Trading 212 opens for manual review/order placement.</span>
-          <a href={trading212Url} target="_blank" rel="noopener noreferrer">Trading 212 ↗</a>
+          <span>Click a stock to open its live JFire detail/news drawer.</span>
+          <span>Trading 212 native stock deep-linking is not used because Trading 212 does not document a supported public instrument deep-link scheme.</span>
         </div>
       </main>
-
-      <SettingsPanel settings={settings} onApply={handleApplySettings} isOpen={showSettings} onClose={() => setShowSettings(false)} />
 
       <StockDetailDrawer
         symbol={selectedStockSymbol}
