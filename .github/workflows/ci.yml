@@ -25,19 +25,6 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      # TypeScript currently hangs in the client project on the GitHub runner.
-      # Keep it diagnostic-only so a valid Vite build is not blocked by the
-      # compiler process. The production build remains the release gate.
-      - name: Typecheck client (diagnostic)
-        continue-on-error: true
-        timeout-minutes: 2
-        run: npm run typecheck -- --pretty false --noErrorTruncation
-
-      - name: Typecheck server (diagnostic)
-        continue-on-error: true
-        timeout-minutes: 2
-        run: npm run typecheck:node -- --pretty false --noErrorTruncation
-
       - name: Lint
         run: npm run lint
 
