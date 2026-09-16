@@ -1,0 +1,58 @@
+/* Large-screen readability pass for JFire Momentum */
+.app-header{height:92px;padding:0 34px;gap:30px}
+.brand-block{min-width:350px}
+.brand-line b{font-size:20px;letter-spacing:2.2px}
+.brand-mark{width:34px;height:34px;font-size:12px}
+.brand-block small{font-size:10px;letter-spacing:2px;margin-top:5px}
+.clock-card{padding:9px 12px;gap:9px}
+.clock-card span{font-size:9px}
+.clock-card b{font-size:14px}
+.market-state{min-width:180px;padding-left:22px}
+.market-state b{font-size:12px}
+.market-state small{font-size:10px}
+main{max-width:1900px;padding:30px 34px}
+.hero-bar{margin-bottom:18px}
+.hero-title{font-size:24px}
+.hero-title svg{width:21px;height:21px}
+.hero-subtitle{font-size:13px;margin-top:7px}
+.toolbar-actions{gap:9px}
+.toolbar-actions button{padding:10px 14px;font-size:12px;border-radius:8px}
+.toolbar-actions button svg{width:15px;height:15px}
+.status-strip{gap:16px;padding:11px 14px;margin-bottom:16px;font-size:12px}
+.data-mode{padding:7px 10px;font-size:10px}
+.leaderboard{border-radius:12px}
+.leaderboard-head{padding:16px 18px}
+.leaderboard-head b{font-size:13px}
+.leaderboard-head span{font-size:11px}
+.leader-count{padding:6px 9px}
+.stock-card{grid-template-columns:54px minmax(320px,1fr) 105px 95px 95px 95px 105px 78px 250px;gap:14px;padding:18px 20px;min-height:102px}
+.rank{font-size:15px}
+.ticker-line{gap:9px}
+.ticker-line>strong{font-size:21px;letter-spacing:.7px;font-weight:900}
+.stock-name{font-size:12px;margin-top:5px}
+.signal-badge,.freshness-badge,.trigger-tag,.news-pill{font-size:9px}
+.signal-badge{padding:5px 8px}
+.freshness-badge{padding:4px 7px}
+.trigger-row{gap:6px;margin-top:9px}
+.trigger-tag{padding:4px 7px}
+.news-pill{padding:4px 7px}
+.metric{padding-left:12px}
+.metric span{font-size:9px}
+.metric b{font-size:14px;margin-top:5px}
+.price-metric b{font-size:17px}
+.score{padding:5px 8px}
+.row-actions{gap:8px}
+.row-actions button{padding:9px 11px;font-size:10px}
+.row-actions button svg{width:15px;height:15px}
+.empty-state{min-height:360px}
+.empty-state b{font-size:16px}
+.empty-state span{font-size:12px}
+.footer-note{font-size:10px;padding:20px}
+
+/* Keep the desktop layout spacious; let the stock cards breathe on large monitors. */
+@media(min-width:1600px){
+  .stock-card{grid-template-columns:58px minmax(380px,1fr) 120px 105px 105px 105px 115px 86px 270px;min-height:112px;padding:20px 24px}
+  .ticker-line>strong{font-size:23px}
+  .metric b{font-size:15px}
+  .price-metric b{font-size:18px}
+}
