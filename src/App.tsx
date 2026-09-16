@@ -52,12 +52,8 @@ const getSignalClass = (signal?: string) => {
 };
 
 const getFreshnessConfig = (freshness?: string) => {
-  if (freshness === 'LIVE') {
-    return { label: 'LIVE', icon: '●', className: 'freshness-live', title: 'Live WebSocket trade/bar updates' };
-  }
-  if (freshness === 'SEEDED') {
-    return { label: 'REST', icon: '◐', className: 'freshness-seeded', title: 'REST snapshot / historical data fallback' };
-  }
+  if (freshness === 'LIVE') return { label: 'LIVE', icon: '●', className: 'freshness-live', title: 'Live WebSocket trade/bar updates' };
+  if (freshness === 'SEEDED') return { label: 'REST', icon: '◐', className: 'freshness-seeded', title: 'REST snapshot / historical data fallback' };
   return { label: 'STALE', icon: '○', className: 'freshness-stale', title: 'Data older than the active freshness window' };
 };
 
@@ -100,8 +96,6 @@ const activeMomentumRank = (stock: StockData) => {
     if (/RVOL|VOLUME/i.test(trigger)) return bonus + 2;
     return bonus;
   }, 0);
-
-  // Short-term movement is deliberately weighted much more heavily than the daily move.
   return one * 8 + five * 5 + Math.min(rvol, 20) * 0.75 + volumeAcceleration * 0.5 + daily * 0.15 + triggerBonus;
 };
 
@@ -120,15 +114,10 @@ export default function App() {
   const [settings, setSettings] = useState<ScannerSettings>(DEFAULT_SETTINGS);
   const [filters, setFilters] = useState<FilterState>(defaultFilters(DEFAULT_SETTINGS));
   const [cat, setCat] = useState<Category>('momentum');
-  const [filtersOpen, setFiltersOpen] = useState(true);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedStockSymbol, setSelectedStockSymbol] = useState<string | null>(null);
   const [newsArticles, setNewsArticles] = useState<NewsArticle[]>([]);
-  const [newsStatus, setNewsStatus] = useState<NewsEngineStatus>({
-    connected: false,
-    totalArticles: 0,
-    trackedSymbolsWithNews: 0,
-    lastArticleTime: null,
-  });
+  const [newsStatus, setNewsStatus] = useState<NewsEngineStatus>({ connected: false, totalArticles: 0, trackedSymbolsWithNews: 0, lastArticleTime: null });
   const [ukTime, setUkTime] = useState('');
   const [etTime, setEtTime] = useState('');
   const [lastRestUpdate, setLastRestUpdate] = useState<Date | null>(null);
@@ -136,13 +125,7 @@ export default function App() {
   useEffect(() => {
     const tick = () => {
       const now = new Date();
-      const fmt = (timeZone: string) => now.toLocaleTimeString('en-GB', {
-        timeZone,
-        hour12: false,
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-      });
+      const fmt = (timeZone: string) => now.toLocaleTimeString('en-GB', { timeZone, hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
       setUkTime(`${fmt('Europe/London')} UK`);
       setEtTime(`${fmt('America/New_York')} ET`);
     };
@@ -151,41 +134,26 @@ export default function App() {
     return () => window.clearInterval(id);
   }, []);
 
-  const sessionInfo = useMemo(
-    () => status.sessionInfo || getMarketSession(new Date(), undefined, status.activeFeed || status.feed),
-    [status.sessionInfo, status.activeFeed, status.feed]
-  );
-
+  const sessionInfo = useMemo(() => status.sessionInfo || getMarketSession(new Date(), undefined, status.activeFeed || status.feed), [status.sessionInfo, status.activeFeed, status.feed]);
   const restFallbackActive = !status.connected && stocks.length > 0 && status.stocksTracked > 0;
 
   useEffect(() => {
-    fetch('/api/status')
-      .then((r) => r.json())
-      .then((data) => {
-        if (data && typeof data === 'object') {
-          setStatus((prev) => ({ ...prev, ...data }));
-          if (data.settings) {
-            setSettings(data.settings);
-            setFilters((prev) => ({
-              ...prev,
-              minPrice: data.settings.minPrice,
-              maxPrice: data.settings.maxPrice,
-              minVolume: data.settings.minVolume,
-            }));
-          }
+    fetch('/api/status').then((r) => r.json()).then((data) => {
+      if (data && typeof data === 'object') {
+        setStatus((prev) => ({ ...prev, ...data }));
+        if (data.settings) {
+          setSettings(data.settings);
+          setFilters((prev) => ({ ...prev, minPrice: data.settings.minPrice, maxPrice: data.settings.maxPrice, minVolume: data.settings.minVolume }));
         }
-      })
-      .catch(() => {});
+      }
+    }).catch(() => {});
 
-    fetch('/api/stocks')
-      .then((r) => r.json())
-      .then((data) => {
-        if (Array.isArray(data?.stocks)) {
-          setStocks(data.stocks);
-          if (data.stocks.length) setLastRestUpdate(new Date());
-        }
-      })
-      .catch(() => {});
+    fetch('/api/stocks').then((r) => r.json()).then((data) => {
+      if (Array.isArray(data?.stocks)) {
+        setStocks(data.stocks);
+        if (data.stocks.length) setLastRestUpdate(new Date());
+      }
+    }).catch(() => {});
 
     const stream = new EventSource('/api/stream');
     stream.onmessage = (event) => {
@@ -194,20 +162,12 @@ export default function App() {
         if (msg.type === 'stocks') {
           setStocks(msg.stocks || []);
           setLastRestUpdate(new Date());
-          setStatus((prev) => ({
-            ...prev,
-            universeSize: msg.universeSize ?? prev.universeSize,
-            stocksTracked: msg.stocksTracked ?? prev.stocksTracked,
-          }));
+          setStatus((prev) => ({ ...prev, universeSize: msg.universeSize ?? prev.universeSize, stocksTracked: msg.stocksTracked ?? prev.stocksTracked }));
         } else if (msg.type === 'connection_status') {
           setStatus((prev) => ({ ...prev, ...msg }));
           if (msg.settings) setSettings(msg.settings);
         } else if (msg.type === 'scanProgress') {
-          setStatus((prev) => ({
-            ...prev,
-            scanProgress: msg.data,
-            universeSize: msg.data?.universeSize || prev.universeSize,
-          }));
+          setStatus((prev) => ({ ...prev, scanProgress: msg.data, universeSize: msg.data?.universeSize || prev.universeSize }));
         } else if (msg.type === 'stockUpdate' && msg.stock) {
           setStocks((prev) => {
             const idx = prev.findIndex((s) => s.symbol === msg.stock.symbol);
@@ -224,25 +184,15 @@ export default function App() {
         } else if (msg.type === 'news_status') {
           setNewsStatus((prev) => ({ ...prev, ...msg }));
         } else if (msg.type === 'news_reaction_update') {
-          setNewsArticles((prev) => prev.map((article) =>
-            article.id !== msg.articleId ? article : {
-              ...article,
-              reactions: {
-                ...(article.reactions || {}),
-                [msg.symbol]: msg.reaction,
-              },
-            }
-          ));
+          setNewsArticles((prev) => prev.map((article) => article.id !== msg.articleId ? article : { ...article, reactions: { ...(article.reactions || {}), [msg.symbol]: msg.reaction } }));
         }
       } catch {}
     };
-
     return () => stream.close();
   }, []);
 
   const rows = useMemo(() => {
     const query = filters.search.trim().toUpperCase();
-
     const candidates = stocks.filter((s) => {
       if (query && !s.symbol.toUpperCase().includes(query) && !(s.name || '').toUpperCase().includes(query)) return false;
       if (!Number.isFinite(s.price) || s.price < filters.minPrice || s.price > filters.maxPrice) return false;
@@ -251,7 +201,6 @@ export default function App() {
       if (!Number.isFinite(s.dailyChange ?? NaN) || (s.dailyChange ?? 0) < filters.minDaily) return false;
       if ((s.relativeVolume ?? 0) < filters.minRvol) return false;
       if (s.score < filters.minScore) return false;
-
       const one = s.oneMinuteChange;
       const five = s.fiveMinuteChange;
       const hasPositiveShortTerm = (one !== null && one > filters.min1m) || (five !== null && five > filters.min5m);
@@ -260,7 +209,6 @@ export default function App() {
       if (s.freshness === 'STALE') return false;
       return true;
     });
-
     candidates.sort((a, b) => {
       const bRank = activeMomentumRank(b);
       const aRank = activeMomentumRank(a);
@@ -276,58 +224,27 @@ export default function App() {
       if (bRvol !== aRvol) return bRvol - aRvol;
       return (b.dailyChange ?? 0) - (a.dailyChange ?? 0);
     });
-
     return candidates.slice(0, 10);
   }, [stocks, filters]);
 
-  const selectedStock = useMemo(
-    () => stocks.find((s) => s.symbol === selectedStockSymbol) || null,
-    [stocks, selectedStockSymbol]
-  );
-
-  const selectedNews = useMemo(() => {
-    if (!selectedStockSymbol) return [];
-    return newsArticles.filter((article) => article.symbols?.some((s) => s.toUpperCase() === selectedStockSymbol.toUpperCase()));
-  }, [newsArticles, selectedStockSymbol]);
-
+  const selectedStock = useMemo(() => stocks.find((s) => s.symbol === selectedStockSymbol) || null, [stocks, selectedStockSymbol]);
+  const selectedNews = useMemo(() => !selectedStockSymbol ? [] : newsArticles.filter((article) => article.symbols?.some((s) => s.toUpperCase() === selectedStockSymbol.toUpperCase())), [newsArticles, selectedStockSymbol]);
   const openStock = (symbol: string) => setSelectedStockSymbol(symbol);
-
-  const updateFilter = <K extends keyof FilterState>(key: K, value: FilterState[K]) => {
-    setFilters((prev) => ({ ...prev, [key]: value }));
-  };
-
+  const updateFilter = <K extends keyof FilterState>(key: K, value: FilterState[K]) => setFilters((prev) => ({ ...prev, [key]: value }));
   const resetFilters = () => setFilters(defaultFilters(settings));
 
   return (
     <div className="app" id="app-container">
       <header className="app-header">
-        <div className="brand-block">
-          <div className="brand-line"><span className="brand-mark">JF</span><b>JFIRE MOMENTUM</b></div>
-          <small>TOP 10 US EQUITY MOMENTUM SCANNER</small>
-        </div>
-
-        <div className="clocks">
-          <div className="clock-card uk-clock"><Clock size={14} /><div><span>YOUR TIMEZONE</span><b>{ukTime || '—'}</b></div></div>
-          <div className="clock-card"><Clock size={14} /><div><span>NEW YORK</span><b>{etTime || '—'}</b></div></div>
-        </div>
-
-        <div className="market-state">
-          <span className={`market-dot ${sessionInfo.session === 'REGULAR' ? 'green' : 'amber'}`}>●</span>
-          <div><b>{sessionInfo.displayStatus}</b><small>{sessionInfo.sessionBadge} · {sessionInfo.feedBadge}</small></div>
-        </div>
+        <div className="brand-block"><div className="brand-line"><span className="brand-mark">JF</span><b>JFIRE MOMENTUM</b></div><small>TOP 10 US EQUITY MOMENTUM SCANNER</small></div>
+        <div className="clocks"><div className="clock-card uk-clock"><Clock size={14} /><div><span>YOUR TIMEZONE</span><b>{ukTime || '—'}</b></div></div><div className="clock-card"><Clock size={14} /><div><span>NEW YORK</span><b>{etTime || '—'}</b></div></div></div>
+        <div className="market-state"><span className={`market-dot ${sessionInfo.session === 'REGULAR' ? 'green' : 'amber'}`}>●</span><div><b>{sessionInfo.displayStatus}</b><small>{sessionInfo.sessionBadge} · {sessionInfo.feedBadge}</small></div></div>
       </header>
 
       <main>
         <section className="hero-bar">
-          <div>
-            <div className="hero-title"><Zap size={18} /> Momentum Leaders</div>
-            <div className="hero-subtitle">Top 10 active upward movers first. Use the filters below to search the full tracked market.</div>
-          </div>
-          <div className="toolbar-actions">
-            <button onClick={() => setCat('momentum')} className={cat === 'momentum' ? 'active' : ''}><Activity size={13} /> Top 10 Momentum</button>
-            <button onClick={() => setCat('news')} className={cat === 'news' ? 'active' : ''}><Newspaper size={13} /> Live News</button>
-            <button onClick={() => setFiltersOpen((open) => !open)} className={filtersOpen ? 'active' : ''}><Filter size={13} /> Filters</button>
-          </div>
+          <div><div className="hero-title"><Zap size={18} /> Momentum Leaders</div><div className="hero-subtitle">Top 10 active upward movers first. Use the filters below to search the full tracked market.</div></div>
+          <div className="toolbar-actions"><button onClick={() => setCat('momentum')} className={cat === 'momentum' ? 'active' : ''}><Activity size={13} /> Top 10 Momentum</button><button onClick={() => setCat('news')} className={cat === 'news' ? 'active' : ''}><Newspaper size={13} /> Live News</button><button onClick={() => setFiltersOpen((open) => !open)} className={filtersOpen ? 'active' : ''}><Filter size={13} /> Filters</button></div>
         </section>
 
         {filtersOpen && (
@@ -348,33 +265,15 @@ export default function App() {
         )}
 
         <section className="status-strip">
-          <div className={`data-mode ${status.connected ? 'live' : restFallbackActive ? 'rest' : 'offline'}`}>
-            {status.connected ? <Wifi size={13} /> : restFallbackActive ? <Activity size={13} /> : <WifiOff size={13} />}
-            <b>{status.connected ? 'LIVE — IEX WEBSOCKET' : restFallbackActive ? 'LIVE — REST SNAPSHOT' : 'OFFLINE'}</b>
-          </div>
-          <span>{status.universeSize.toLocaleString()} common stocks</span>
-          <span>{status.stocksTracked.toLocaleString()} tracked</span>
-          <span>{rows.length}/10 momentum leaders</span>
-          <span>{lastRestUpdate ? `Last update ${lastRestUpdate.toLocaleTimeString('en-GB', { hour12: false })} UK` : 'Waiting for data'}</span>
-          <span className="status-next">Next: {sessionInfo.nextTransition.targetBadge} {sessionInfo.nextTransition.countdownFormatted}</span>
+          <div className={`data-mode ${status.connected ? 'live' : restFallbackActive ? 'rest' : 'offline'}`}>{status.connected ? <Wifi size={13} /> : restFallbackActive ? <Activity size={13} /> : <WifiOff size={13} />}<b>{status.connected ? 'LIVE — IEX WEBSOCKET' : restFallbackActive ? 'LIVE — REST SNAPSHOT' : 'OFFLINE'}</b></div>
+          <span>{status.universeSize.toLocaleString()} common stocks</span><span>{status.stocksTracked.toLocaleString()} tracked</span><span>{rows.length}/10 momentum leaders</span><span>{lastRestUpdate ? `Last update ${lastRestUpdate.toLocaleTimeString('en-GB', { hour12: false })} UK` : 'Waiting for data'}</span><span className="status-next">Next: {sessionInfo.nextTransition.targetBadge} {sessionInfo.nextTransition.countdownFormatted}</span>
         </section>
 
         {cat === 'news' ? (
-          <NewsPanel
-            articles={newsArticles}
-            newsStatus={newsStatus}
-            stocks={stocks}
-            onSelectStock={openStock}
-            getSignalClass={getSignalClass}
-            getFreshnessConfig={getFreshnessConfig}
-          />
+          <NewsPanel articles={newsArticles} newsStatus={newsStatus} stocks={stocks} onSelectStock={openStock} getSignalClass={getSignalClass} getFreshnessConfig={getFreshnessConfig} />
         ) : (
           <section className="leaderboard">
-            <div className="leaderboard-head">
-              <div><b>TOP 10 MOMENTUM</b><span>Active short-term movement · volume/RVOL · daily momentum · real data only</span></div>
-              <span className="leader-count">{rows.length} / 10</span>
-            </div>
-
+            <div className="leaderboard-head"><div><b>TOP 10 MOMENTUM</b><span>Active short-term movement · volume/RVOL · daily momentum · real data only</span></div><span className="leader-count">{rows.length} / 10</span></div>
             {rows.length === 0 ? (
               <div className="empty-state"><Activity size={28} /><b>No stocks match the current filters</b><span>Lower the price, volume, short-term momentum, RVOL or score filters, or wait for fresh upward movement.</span></div>
             ) : (
@@ -383,20 +282,15 @@ export default function App() {
                   const fresh = getFreshnessConfig(s.freshness);
                   const positive5 = s.fiveMinuteChange !== null && s.fiveMinuteChange !== undefined && s.fiveMinuteChange > 0;
                   const positive1 = s.oneMinuteChange !== null && s.oneMinuteChange !== undefined && s.oneMinuteChange > 0;
+                  const latestNews = newsArticles.find((article) => article.symbols?.some((symbol) => symbol.toUpperCase() === s.symbol.toUpperCase()));
                   return (
                     <article className={`stock-card rank-${index + 1}`} key={s.symbol} onClick={() => openStock(s.symbol)}>
                       <div className="rank">#{index + 1}</div>
                       <div className="stock-main">
-                        <div className="ticker-line">
-                          <strong>{s.symbol}</strong>
-                          <span className={`signal-badge ${getSignalClass(s.signal)}`}>{s.signal || 'MOMENTUM'}</span>
-                          <span className={`freshness-badge ${fresh.className}`}>{fresh.icon} {fresh.label}</span>
-                        </div>
+                        <div className="ticker-line"><strong>{s.symbol}</strong><span className={`signal-badge ${getSignalClass(s.signal)}`}>{s.signal || 'MOMENTUM'}</span><span className={`freshness-badge ${fresh.className}`}>{fresh.icon} {fresh.label}</span></div>
                         <span className="stock-name">{s.name || 'US common stock'}</span>
-                        <div className="trigger-row">
-                          {s.triggers.slice(0, 4).map((t) => <span key={t} className={`trigger-tag ${getTriggerClass(t)}`}>{t}</span>)}
-                          {s.newsCount ? <span className="news-pill"><Newspaper size={9} /> {s.newsCount} news</span> : null}
-                        </div>
+                        <div className="trigger-row">{s.triggers.slice(0, 4).map((t) => <span key={t} className={`trigger-tag ${getTriggerClass(t)}`}>{t}</span>)}{s.newsCount ? <span className="news-pill"><Newspaper size={9} /> {s.newsCount} news</span> : null}</div>
+                        {latestNews && <div className="stock-catalyst"><Newspaper size={11} /><span>{latestNews.headline}</span></div>}
                       </div>
                       <div className="metric price-metric"><span>PRICE</span><b>{money(s.price)}</b></div>
                       <div className="metric"><span>DAY</span><b className="positive">{pct(s.dailyChange)}</b></div>
@@ -404,9 +298,7 @@ export default function App() {
                       <div className="metric"><span>1M</span><b className={positive1 ? 'positive' : 'muted'}>{pct(s.oneMinuteChange)}</b></div>
                       <div className="metric"><span>RVOL</span><b>{s.relativeVolume ? `${s.relativeVolume.toFixed(2)}x` : '—'}</b></div>
                       <div className="metric"><span>SCORE</span><b className="score">{s.score}</b></div>
-                      <div className="row-actions" onClick={(e) => e.stopPropagation()}>
-                        <button className="news-button" onClick={() => openStock(s.symbol)} title="Open stock details and news"><Newspaper size={13} /> News</button>
-                      </div>
+                      <div className="row-actions" onClick={(e) => e.stopPropagation()}><button className="news-button" onClick={() => openStock(s.symbol)} title="Open stock details and news"><Newspaper size={13} /> News</button></div>
                     </article>
                   );
                 })}
@@ -415,22 +307,10 @@ export default function App() {
           </section>
         )}
 
-        <div className="footer-note">
-          <span>Real market data only — no demo stocks.</span>
-          <span>Click a stock to open its live JFire detail/news drawer.</span>
-          <span>Trading 212 native stock deep-linking is not used because Trading 212 does not document a supported public instrument deep-link scheme.</span>
-        </div>
+        <div className="footer-note"><span>Real market data only — no demo stocks.</span><span>Click a stock to open its live JFire chart, volume activity and news catalysts.</span></div>
       </main>
 
-      <StockDetailDrawer
-        symbol={selectedStockSymbol}
-        onClose={() => setSelectedStockSymbol(null)}
-        stock={selectedStock}
-        newsArticles={selectedNews}
-        getSignalClass={getSignalClass}
-        getFreshnessConfig={getFreshnessConfig}
-        getTriggerClass={getTriggerClass}
-      />
+      <StockDetailDrawer symbol={selectedStockSymbol} onClose={() => setSelectedStockSymbol(null)} stock={selectedStock} newsArticles={selectedNews} getSignalClass={getSignalClass} getFreshnessConfig={getFreshnessConfig} getTriggerClass={getTriggerClass} />
     </div>
   );
 }
