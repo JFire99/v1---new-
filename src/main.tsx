@@ -2,6 +2,7 @@ import { createRoot } from 'react-dom/client';
 import App from './App';
 import './App.css';
 import './jfire-drawer.css';
+import './jfire-ui-overrides.css';
 
 const root = document.getElementById('root');
 
