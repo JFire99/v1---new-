@@ -1,11 +1,11 @@
 import type { Plugin, ViteDevServer } from 'vite';
-import { Scanner } from './src/scanner-engine';
-import { NewsEngine } from './src/news-engine';
+import { ResilientScanner } from './src/resilient-scanner';
+import { ResilientNewsEngine } from './src/resilient-news-engine';
 import type { ScannerSettings } from './src/types/scanner';
 
 export function jfire(env: Record<string, string>): Plugin {
-  let s: Scanner | null = null;
-  let n: NewsEngine | null = null;
+  let s: ResilientScanner | null = null;
+  let n: ResilientNewsEngine | null = null;
   const clients = new Set<any>();
 
   const send = (x: any) => {
@@ -34,10 +34,10 @@ export function jfire(env: Record<string, string>): Plugin {
     const feed = env.ALPACA_FEED || process.env.ALPACA_FEED || 'iex';
 
     if (!apiKey || !apiSecret) return null;
-    s = new Scanner(apiKey, apiSecret, feed, send);
+    s = new ResilientScanner(apiKey, apiSecret, feed, send);
 
     // Initialize NewsEngine with stock snapshot callback
-    n = new NewsEngine(apiKey, apiSecret, send, (sym) => s?.getSnapshotForNews(sym) || null);
+    n = new ResilientNewsEngine(apiKey, apiSecret, send, (sym) => s?.getSnapshotForNews(sym) || null);
     s.setNewsEngine(n);
 
     void s.start();
@@ -167,6 +167,7 @@ export function jfire(env: Record<string, string>): Plugin {
     },
     closeBundle() {
       s?.stop();
+      n?.stop();
     },
   };
 }
