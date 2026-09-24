@@ -28,6 +28,7 @@ interface StockInternal {
   previousClose: number | null;
   dailyChange: number | null;
   oneMinuteChange: number | null;
+  twoMinuteChange: number | null;
   fiveMinuteChange: number | null;
   volume: number;
   dollarVolume: number;
@@ -733,6 +734,7 @@ export class Scanner {
                 const refTime = latestPt ? latestPt.t : Date.now();
 
                 s.oneMinuteChange = this.calcMomentum(s.history, refTime, 55000, 180000, s.price);
+                s.twoMinuteChange = this.calcMomentum(s.history, refTime, 115000, 300000, s.price);
                 s.fiveMinuteChange = this.calcMomentum(s.history, refTime, 270000, 600000, s.price);
                 s.volumeAcceleration = this.calcVolumeAcceleration(s);
                 this.evaluate(s);
@@ -1070,7 +1072,7 @@ export class Scanner {
 
     if (m?.T === 'subscription') {
       console.log(
-        `[JFIRE] WS subscription confirmed: ${m.trades?.length || 0} trades, ${m.bars?.length || 0} bars, ${m.updatedBars?.length || 0} updatedBars`
+        `[JFIRE] WS subscription confirmed: ${m.trades?.length || 0} trades, ${m.bars?.length || 0} bars, ${m.updatedBars?.length || 0} updatedBars, ${m.statuses?.length || 0} statuses`
       );
       return;
     }
@@ -1078,6 +1080,22 @@ export class Scanner {
     if (m?.T === 'error') {
       console.error('[JFIRE] WS error message received:', m);
       this.diagnostics.wsLastError = `${m.code}: ${m.msg}`;
+      return;
+    }
+
+    if (m?.T === 's') {
+      const sym = m.S;
+      const s = sym ? this.stocks.get(sym) : undefined;
+      if (!s) return;
+      const code = String(m.sc || '').toUpperCase();
+      const message = String(m.sm || m.rm || '').toLowerCase();
+      const resumed = ['3', 'Q', 'T'].includes(code) || /resume/.test(message);
+      const halted = !resumed && (['H', 'P'].includes(code) || /halt|pause|luld/.test(message));
+      s.halted = halted;
+      s.haltReason = halted ? String(m.sm || m.rm || 'Trading halt') : null;
+      s.haltUpdatedAt = m.t || new Date().toISOString();
+      s.lastUpdate = new Date().toISOString();
+      this.emit({ type: 'stockUpdate', stock: this.toPublicStock(s) });
       return;
     }
 
@@ -1136,6 +1154,7 @@ export class Scanner {
     }
 
     s.oneMinuteChange = this.calcMomentum(s.history, eventTime, 55000, 180000, p);
+    s.twoMinuteChange = this.calcMomentum(s.history, eventTime, 115000, 300000, p);
     s.fiveMinuteChange = this.calcMomentum(s.history, eventTime, 270000, 600000, p);
     s.volumeAcceleration = this.calcVolumeAcceleration(s, s.minuteVolume ?? undefined);
 
@@ -1169,6 +1188,7 @@ export class Scanner {
             trades: toUnsub,
             bars: toUnsub,
             updatedBars: toUnsub,
+            statuses: toUnsub,
           })
         );
       } catch (err: any) {
@@ -1184,6 +1204,7 @@ export class Scanner {
             trades: toSub,
             bars: toSub,
             updatedBars: toSub,
+            statuses: toSub,
           })
         );
         void this.seedHistoricalBars(toSub);
@@ -1314,6 +1335,7 @@ export class Scanner {
       previousClose: s.previousClose,
       dailyChange: s.dailyChange,
       oneMinuteChange: s.oneMinuteChange,
+      twoMinuteChange: s.twoMinuteChange,
       fiveMinuteChange: s.fiveMinuteChange,
       volume: s.volume,
       dollarVolume: s.dollarVolume,
@@ -1329,6 +1351,9 @@ export class Scanner {
       newsCount: newsCount > 0 ? newsCount : undefined,
       hasRecentNews: newsCount > 0,
       lastUpdate: s.lastUpdate,
+      halted: !!s.halted,
+      haltReason: s.haltReason || null,
+      haltUpdatedAt: s.haltUpdatedAt || null,
     };
   }
 
