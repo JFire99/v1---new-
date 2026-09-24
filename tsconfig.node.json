@@ -12,6 +12,9 @@
     "moduleDetection": "force",
     "noEmit": true,
 
+    /* Node environment */
+    "types": ["node"],
+
     /* Linting */
     "strict": true,
     "noUnusedLocals": false,

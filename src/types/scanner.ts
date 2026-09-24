@@ -30,12 +30,15 @@ export interface StockData {
   previousClose: number | null;
   dailyChange: number | null;
   oneMinuteChange: number | null;
+  twoMinuteChange: number | null;
   fiveMinuteChange: number | null;
   volume: number;
   dollarVolume: number;
   previousDailyVolume?: number | null;
   relativeVolume: number | null;
   volumeAcceleration?: number | null;
+  minuteVolume?: number | null;
+  dayOpen: number | null;
   dayHigh: number;
   distanceFromHigh: number | null;
   score: number;
@@ -45,6 +48,24 @@ export interface StockData {
   newsCount?: number;
   hasRecentNews?: boolean;
   lastUpdate: string;
+  halted?: boolean;
+  haltReason?: string | null;
+  haltUpdatedAt?: string | null;
+}
+
+export interface LivePricePoint {
+  t: number;
+  p: number;
+  v?: number;
+}
+
+export interface StockLiveDetail {
+  symbol: string;
+  history: LivePricePoint[];
+  minuteVolume: number | null;
+  volumeAcceleration: number | null;
+  lastWsTime: number | null;
+  live: boolean;
 }
 
 export interface MarketClock {
