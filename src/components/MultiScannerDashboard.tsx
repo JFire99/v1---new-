@@ -5,7 +5,7 @@ import type { ScannerStatus, StockData } from '../types/scanner';
 import { StockDetailDrawer } from './StockDetailDrawer';
 import './MultiScannerDashboard.css';
 
-type Props = { stocks: StockData[]; status: ScannerStatus; newsArticles: NewsArticle[]; newsStatus: any; ukTime: string; etTime: string; };
+type Props = { stocks: StockData[]; status: ScannerStatus; newsArticles: NewsArticle[]; newsStatus: any; ukTime: string; etTime: string; newsRefreshing: boolean; lastNewsRefresh: Date | null; };
 const money=(n:number)=>n>0?'$'+(n<1?n.toFixed(4):n.toFixed(2)):'—';
 const pct=(n:number|null|undefined)=>n==null||!Number.isFinite(n)?'—':(n>=0?'+':'')+n.toFixed(2)+'%';
 const vol=(n:number)=>n>=1000000000?(n/1000000000).toFixed(2)+'B':n>=1000000?(n/1000000).toFixed(1)+'M':n>=1000?(n/1000).toFixed(0)+'K':String(Math.round(n));
@@ -15,7 +15,7 @@ const shortMomo=(s:StockData)=>s.twoMinuteChange??((s.oneMinuteChange??0)*0.6+(s
 const hasHigh=(s:StockData)=>s.distanceFromHigh!=null&&s.distanceFromHigh<=0.01;
 const gapPct=(s:StockData)=>s.dayOpen!=null&&s.previousClose!=null&&s.previousClose>0?((s.dayOpen-s.previousClose)/s.previousClose)*100:null;
 
-export function MultiScannerDashboard({stocks,status,newsArticles,ukTime,etTime}:Props){
+export function MultiScannerDashboard({stocks,status,newsArticles,ukTime,etTime,newsRefreshing,lastNewsRefresh}:Props){
   const [selected,setSelected]=useState<string|null>(null);
   const [panel,setPanel]=useState<'all'|'up'|'down'|'gap'|'high'|'news'>('all');
   const [query,setQuery]=useState('');
@@ -63,17 +63,14 @@ export function MultiScannerDashboard({stocks,status,newsArticles,ukTime,etTime}
       <button className={panel==='high'?'sel':''} onClick={()=>setPanel('high')}><Bell size={13}/>New High</button>
       <button className={panel==='news'?'sel':''} onClick={()=>setPanel('news')}><Newspaper size={13}/>News</button>
     </div>
+    <div className="ms-news-refresh"><div className="ms-news-refresh-label"><span className={newsRefreshing?"pulse":""}>●</span><strong>LIVE NEWS UPDATE</strong><small>{newsRefreshing?"CHECKING FOR NEW HEADLINES…":lastNewsRefresh?"LAST CHECK "+lastNewsRefresh.toLocaleTimeString("en-GB",{hour12:false}):"INITIALIZING NEWS FEED"}</small></div><div className="ms-news-progress"><i className={newsRefreshing?"running":""}/></div><b>EVERY 3 MIN</b></div>
     <div className="ms-grid">
       <section className="ms-panel ms-main">
         <PanelHead title={title} count={panel==='news'?news.length:list.length}/>
         {panel==='news'?<NewsList articles={news} onSelect={setSelected}/>:<><TableHead mode={panel}/>{list.map((s,i)=>row(s,i,panel))}</>}
       </section>
       <div className="ms-middle">
-        <section className="ms-panel ms-news"><PanelHead title="LIVE NEWS" count={news.length}/><NewsList articles={news.slice(0,12)} onSelect={setSelected}/></section>
-        <section className="ms-chart">
-          <div className="chart-top"><div><strong>{active?.symbol||momo[0]?.symbol||'—'}</strong><span>{active?.name||'Select a scanner row to focus the stock'}</span></div><div>{active?money(active.price):'—'} <em className={positive(active?.dailyChange)?'up':'down'}>{active?pct(active.dailyChange):'—'}</em></div></div>
-          <div className="fake-chart">{active?<><div className="chart-watermark">{active.symbol}</div><div className="chart-line">{Array.from({length:48},(_,i)=><i key={i} style={{height:(18+Math.abs(Math.sin(i/4))*45+(i>38?(i-38)*2:0))+'%'}}/>)}</div><div className="chart-axis"><span>5M {pct(active.fiveMinuteChange)}</span><span>1M {pct(active.oneMinuteChange)}</span><span>HOD {money(active.dayHigh)}</span><span>RVOL {active.relativeVolume?active.relativeVolume.toFixed(2)+'x':'—'}</span></div></>:<div className="chart-empty">Click a stock above to focus it.</div>}</div>
-        </section>
+        <section className="ms-panel ms-news ms-news-main"><PanelHead title="LIVE NEWS" count={news.length}/><NewsList articles={news.slice(0,20)} onSelect={setSelected}/></section>
       </div>
       <aside className="ms-side">
         <section className="ms-panel"><PanelHead title="2 MIN MOMO UP" icon={<ArrowUp size={13}/>} count={up.length}/><MiniList items={up} up onSelect={setSelected}/></section>
