@@ -36,6 +36,7 @@ interface StockInternal {
   relativeVolume: number | null;
   volumeAcceleration: number | null;
   minuteVolume: number | null;
+  dayOpen: number | null;
   dayHigh: number;
   distanceFromHigh: number | null;
   score: number;
@@ -474,6 +475,8 @@ export class Scanner {
         dailyChange = Number(rawPct.toFixed(2));
       }
     }
+
+    s.dayOpen = typeof v.dailyBar?.o === 'number' && Number.isFinite(v.dailyBar.o) && v.dailyBar.o > 0 ? v.dailyBar.o : s.dayOpen ?? null;
 
     // 4. Volume & Dollar Volume
     const volume =
@@ -1337,6 +1340,7 @@ export class Scanner {
       oneMinuteChange: s.oneMinuteChange,
       twoMinuteChange: s.twoMinuteChange,
       fiveMinuteChange: s.fiveMinuteChange,
+      dayOpen: s.dayOpen,
       volume: s.volume,
       dollarVolume: s.dollarVolume,
       previousDailyVolume: s.previousDailyVolume,
