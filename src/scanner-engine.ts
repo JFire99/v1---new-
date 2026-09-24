@@ -476,8 +476,6 @@ export class Scanner {
       }
     }
 
-    s.dayOpen = typeof v.dailyBar?.o === 'number' && Number.isFinite(v.dailyBar.o) && v.dailyBar.o > 0 ? v.dailyBar.o : s.dayOpen ?? null;
-
     // 4. Volume & Dollar Volume
     const volume =
       typeof v.dailyBar?.v === 'number' && Number.isFinite(v.dailyBar.v) && v.dailyBar.v >= 0
@@ -528,6 +526,7 @@ export class Scanner {
     const existing = this.stocks.get(sym);
     const now = Date.now();
     const history: PricePoint[] = existing ? [...existing.history] : [];
+    const dayOpen = typeof v.dailyBar?.o === 'number' && Number.isFinite(v.dailyBar.o) && v.dailyBar.o > 0 ? v.dailyBar.o : (existing?.dayOpen ?? null);
 
     const minuteVol =
       typeof v.minuteBar?.v === 'number' && Number.isFinite(v.minuteBar.v) && v.minuteBar.v > 0
@@ -561,11 +560,15 @@ export class Scanner {
     const refTime = latestPt ? latestPt.t : now;
 
     let oneMinuteChange = this.calcMomentum(trimmedHistory, refTime, 55000, 180000, p);
+    let twoMinuteChange = this.calcMomentum(trimmedHistory, refTime, 115000, 300000, p);
     let fiveMinuteChange = this.calcMomentum(trimmedHistory, refTime, 270000, 600000, p);
 
     // If existing had valid momentum and no newer points were added, preserve it
     if (oneMinuteChange === null && existing?.oneMinuteChange !== null && existing?.oneMinuteChange !== undefined) {
       oneMinuteChange = existing.oneMinuteChange;
+    }
+    if (twoMinuteChange === null && existing?.twoMinuteChange !== null && existing?.twoMinuteChange !== undefined) {
+      twoMinuteChange = existing.twoMinuteChange;
     }
     if (fiveMinuteChange === null && existing?.fiveMinuteChange !== null && existing?.fiveMinuteChange !== undefined) {
       fiveMinuteChange = existing.fiveMinuteChange;
@@ -578,6 +581,7 @@ export class Scanner {
       previousClose: prevClose,
       dailyChange,
       oneMinuteChange,
+      twoMinuteChange,
       fiveMinuteChange,
       volume,
       dollarVolume,
@@ -585,6 +589,7 @@ export class Scanner {
       relativeVolume,
       volumeAcceleration: null,
       minuteVolume: minuteVol,
+      dayOpen,
       dayHigh,
       distanceFromHigh,
       score: 0,
