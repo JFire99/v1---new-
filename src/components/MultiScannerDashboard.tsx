@@ -12,6 +12,7 @@ const vol=(n:number)=>n>=1000000?(n/1000000).toFixed(1)+'M':n>=1000?(n/1000).toF
 const positive=(n:number|null|undefined)=>n!=null&&n>0;
 const shortMomo=(s:StockData)=>s.twoMinuteChange??((s.oneMinuteChange??0)*0.6+(s.fiveMinuteChange??0)*0.4);
 const hasHigh=(s:StockData)=>s.distanceFromHigh!=null&&s.distanceFromHigh<=0.05;
+const gapPct=(s:StockData)=>s.dayOpen!=null&&s.previousClose!=null&&s.previousClose>0?((s.dayOpen-s.previousClose)/s.previousClose)*100:null;
 
 export function MultiScannerDashboard({stocks,status,newsArticles,ukTime,etTime}:Props){
   const [selected,setSelected]=useState<string|null>(null);
@@ -21,7 +22,7 @@ export function MultiScannerDashboard({stocks,status,newsArticles,ukTime,etTime}
   const momo=useMemo(()=>[...visible].sort((a,b)=>shortMomo(b)-shortMomo(a)||b.score-a.score).slice(0,12),[visible]);
   const up=useMemo(()=>momo.filter(s=>shortMomo(s)>0).slice(0,8),[momo]);
   const down=useMemo(()=>[...visible].filter(s=>shortMomo(s)<0).sort((a,b)=>shortMomo(a)-shortMomo(b)).slice(0,8),[visible]);
-  const gaps=useMemo(()=>[...visible].sort((a,b)=>(b.dailyChange??-999)-(a.dailyChange??-999)).slice(0,8),[visible]);
+  const gaps=useMemo(()=>[...visible].filter(s=>gapPct(s)!=null).sort((a,b)=>(gapPct(b)??-999)-(gapPct(a)??-999)).slice(0,8),[visible]);
   const highs=useMemo(()=>[...visible].filter(hasHigh).sort((a,b)=>(b.oneMinuteChange??-999)-(a.oneMinuteChange??-999)).slice(0,8),[visible]);
   const stale=useMemo(()=>[...visible].filter(s=>s.halted||s.freshness==='STALE').slice(0,8),[visible]);
   const news=useMemo(()=>newsArticles.slice(0,12),[newsArticles]);
@@ -31,7 +32,7 @@ export function MultiScannerDashboard({stocks,status,newsArticles,ukTime,etTime}
   const row=(s:StockData, i:number, mode='momo')=>(
     <button className="ms-row" key={s.symbol} onClick={()=>setSelected(s.symbol)}>
       <span className="ms-rank">{i+1}</span><span className="ms-symbol">{s.symbol}<small>{s.name||'US equity'}</small></span>
-      <span>{money(s.price)}</span><span className={positive(s.dailyChange)?'up':'down'}>{pct(s.dailyChange)}</span>
+      <span>{money(s.price)}</span><span className={positive(mode==='gap'?gapPct(s):s.dailyChange)?'up':'down'}>{pct(mode==='gap'?gapPct(s):s.dailyChange)}</span>
       <span className={positive(s.oneMinuteChange)?'up':s.oneMinuteChange!=null?'down':''}>{pct(s.oneMinuteChange)}</span>
       <span className={positive(s.fiveMinuteChange)?'up':s.fiveMinuteChange!=null?'down':''}>{pct(s.fiveMinuteChange)}</span>
       <span>{s.relativeVolume?s.relativeVolume.toFixed(2)+'x':'—'}</span><span>{mode==='high'?pct(s.distanceFromHigh):s.score}</span>
