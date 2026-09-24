@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Activity, ArrowDown, ArrowUp, Bell, Clock3, Flame, Newspaper, Search, TrendingUp, Wifi } from 'lucide-react';
 import type { NewsArticle } from '../types/news';
 import type { ScannerStatus, StockData } from '../types/scanner';
@@ -79,7 +79,7 @@ export function MultiScannerDashboard({stocks,status,newsArticles,ukTime,etTime}
     <StockDetailDrawer symbol={selected} onClose={()=>setSelected(null)} stock={active} newsArticles={activeNews} getSignalClass={()=>'signal-building'} getFreshnessConfig={(f)=>({label:f||'LIVE',icon:'●',className:'freshness-live',title:'Live data'})} getTriggerClass={()=>''}/>
   </div>;
 }
-function PanelHead({title,count,icon}:{title:string;count:number;icon?:React.ReactNode}){return <div className="ms-panel-head"><div>{icon||<Activity size={13}/>}<strong>{title}</strong></div><span>{count}</span></div>}
+function PanelHead({title,count,icon}:{title:string;count:number;icon?:ReactNode}){return <div className="ms-panel-head"><div>{icon||<Activity size={13}/>}<strong>{title}</strong></div><span>{count}</span></div>}
 function TableHead({mode}:{mode:string}){return <div className="ms-table-head"><span>#</span><span>NAME</span><span>PRICE</span><span>DAY</span><span>1M</span><span>5M</span><span>RVOL</span><span>{mode==='high'?'HOD':'SCORE'}</span></div>}
 function MiniList({items,up,high,stale,onSelect}:{items:StockData[];up?:boolean;high?:boolean;stale?:boolean;onSelect:(s:string)=>void}){return <div className="mini-list">{items.map(s=><button key={s.symbol} onClick={()=>onSelect(s.symbol)}><b>{s.symbol}</b><span>{money(s.price)}</span><em className={up?'up':stale?'muted':(s.oneMinuteChange??0)<0?'down':'up'}>{high?'NEW HIGH':stale?'NO RECENT TICK':pct(up?s.oneMinuteChange:s.dailyChange)}</em><small>{vol(s.volume)} · {s.relativeVolume?s.relativeVolume.toFixed(1)+'x RVOL':'RVOL —'}</small></button>)}</div>}
-function NewsList({articles,onSelect}:{articles:NewsArticle[];onSelect:(s:string)=>void}){return <div className="news-list">{articles.map(a=><button key={a.id} onClick={()=>a.symbols?.[0]&&onSelect(a.symbols[0])}><time>{new Date(a.publishedAt||a.createdAt||Date.now()).toLocaleTimeString('en-GB',{hour12:false,hour:'2-digit',minute:'2-digit'})}</time><strong>{a.symbols?.slice(0,2).join(', ')||'MARKET'}</strong><span>{a.headline}</span></button>)}</div>}
+function NewsList({articles,onSelect}:{articles:NewsArticle[];onSelect:(s:string)=>void}){return <div className="news-list">{articles.map(a=><button key={a.id} onClick={()=>a.symbols?.[0]&&onSelect(a.symbols[0])}><time>{new Date(a.createdAt||Date.now()).toLocaleTimeString('en-GB',{hour12:false,hour:'2-digit',minute:'2-digit'})}</time><strong>{a.symbols?.slice(0,2).join(', ')||'MARKET'}</strong><span>{a.headline}</span></button>)}</div>}
