@@ -7,25 +7,46 @@ import './MultiScannerDashboard.css';
 
 type Props = { stocks: StockData[]; status: ScannerStatus; newsArticles: NewsArticle[]; newsStatus: any; ukTime: string; etTime: string; newsRefreshing: boolean; lastNewsRefresh: Date | null; };
 const money=(n:number)=>n>0?'$'+(n<1?n.toFixed(4):n.toFixed(2)):'—';
-const pct=(n:number|null|undefined)=>n==null||!Number.isFinite(n)?'—':(n>=0?'+':'')+n.toFixed(2)+'%';
+const pct=(n:number|null|undefined)=>n==null||!Number.isFinite(n)?'WARM':(n>=0?'+':'')+n.toFixed(2)+'%';
 const vol=(n:number)=>n>=1000000000?(n/1000000000).toFixed(2)+'B':n>=1000000?(n/1000000).toFixed(1)+'M':n>=1000?(n/1000).toFixed(0)+'K':String(Math.round(n));
 const dollarVol=(n:number)=>n>=1000000000?'$'+(n/1000000000).toFixed(2)+'B':n>=1000000?'$'+(n/1000000).toFixed(1)+'M':n>=1000?'$'+(n/1000).toFixed(0)+'K':'$'+Math.round(n);
 const positive=(n:number|null|undefined)=>n!=null&&n>0;
 const shortMomo=(s:StockData)=>s.twoMinuteChange??((s.oneMinuteChange??0)*0.6+(s.fiveMinuteChange??0)*0.4);
 const hasHigh=(s:StockData)=>s.distanceFromHigh!=null&&s.distanceFromHigh<=0.01;
 const gapPct=(s:StockData)=>s.dayOpen!=null&&s.previousClose!=null&&s.previousClose>0?((s.dayOpen-s.previousClose)/s.previousClose)*100:null;
+function clamp(n:number,min=0,max=100){return Math.max(min,Math.min(max,n));}
+function momentumScore(s:StockData){
+  const m1=s.oneMinuteChange??0,m2=s.twoMinuteChange??0,m5=s.fiveMinuteChange??0,rvol=s.relativeVolume??0,day=s.dailyChange??0;
+  const hodBonus=s.distanceFromHigh!=null?clamp((0.50-(s.distanceFromHigh*100))/0.50*10,0,10):0;
+  const rvolScore=clamp(rvol/5*15,0,15);
+  const dollarScore=clamp(Math.log10(Math.max(s.dollarVolume,1)/50000)*2.5,0,5);
+  const raw=clamp(m1*20,-20,20)+clamp(m2*30,-30,30)+clamp(m5*10,-10,10)+rvolScore+hodBonus+clamp(day/4*5,0,5)+dollarScore;
+  return Math.round(clamp(50+raw,0,100));
+}
+function staleSeconds(s:StockData){
+  const t=Date.parse(s.lastUpdate||'');
+  return Number.isFinite(t)?Math.max(0,(Date.now()-t)/1000):null;
+}
+function staleLabel(s:StockData){
+  if(s.halted)return 'HALTED';
+  const age=staleSeconds(s);
+  if(age!=null&&age>=300)return 'STALE >5M';
+  if(age!=null&&age>=60)return 'STALE '+Math.round(age)+'s';
+  if(age!=null)return 'NO TICK '+Math.round(age)+'s';
+  return 'STALE';
+}
 
 export function MultiScannerDashboard({stocks,status,newsArticles,ukTime,etTime,newsRefreshing,lastNewsRefresh}:Props){
   const [selected,setSelected]=useState<string|null>(null);
   const [panel,setPanel]=useState<'all'|'up'|'down'|'gap'|'high'|'news'>('all');
   const [query,setQuery]=useState('');
   const visible=useMemo(()=>{const q=query.trim().toUpperCase();return stocks.filter(s=>!q||s.symbol.includes(q)||(s.name||'').toUpperCase().includes(q));},[stocks,query]);
-  const momo=useMemo(()=>[...visible].filter(s=>s.distanceFromHigh!=null&&s.distanceFromHigh<=0.02).sort((a,b)=>shortMomo(b)-shortMomo(a)||b.score-a.score).slice(0,12),[visible]);
-  const up=useMemo(()=>momo.filter(s=>shortMomo(s)>0).slice(0,8),[momo]);
-  const down=useMemo(()=>[...visible].filter(s=>shortMomo(s)<0).sort((a,b)=>shortMomo(a)-shortMomo(b)).slice(0,8),[visible]);
+  const momo=useMemo(()=>[...visible].filter(s=>s.distanceFromHigh!=null&&s.distanceFromHigh<=0.02&&s.volume>=10000).sort((a,b)=>momentumScore(b)-momentumScore(a)||shortMomo(b)-shortMomo(a)).slice(0,12),[visible]);
+  const up=useMemo(()=>[...visible].filter(s=>shortMomo(s)>=0.10&&((s.twoMinuteChange??0)>=0.20||(s.oneMinuteChange??0)>=0.10||(s.fiveMinuteChange??0)>=0.50)).sort((a,b)=>momentumScore(b)-momentumScore(a)).slice(0,8),[visible]);
+  const down=useMemo(()=>[...visible].filter(s=>shortMomo(s)<=-0.10&&((s.twoMinuteChange??0)<=-0.20||(s.oneMinuteChange??0)<=-0.10||(s.fiveMinuteChange??0)<=-0.50)).sort((a,b)=>momentumScore(a)-momentumScore(b)).slice(0,8),[visible]);
   const gaps=useMemo(()=>[...visible].filter(s=>(gapPct(s)??-999)>0).sort((a,b)=>(gapPct(b)??-999)-(gapPct(a)??-999)).slice(0,8),[visible]);
-  const highs=useMemo(()=>[...visible].filter(hasHigh).sort((a,b)=>(b.oneMinuteChange??-999)-(a.oneMinuteChange??-999)).slice(0,8),[visible]);
-  const stale=useMemo(()=>[...visible].filter(s=>s.halted||s.freshness==='STALE').slice(0,8),[visible]);
+  const highs=useMemo(()=>[...visible].filter(hasHigh).sort((a,b)=>momentumScore(b)-momentumScore(a)).slice(0,8),[visible]);
+  const stale=useMemo(()=>[...visible].filter(s=>s.halted||s.freshness==='STALE'||(staleSeconds(s)??0)>=30).sort((a,b)=>(staleSeconds(b)??0)-(staleSeconds(a)??0)).slice(0,8),[visible]);
   const volumeLeaders=useMemo(()=>[...visible].sort((a,b)=>b.volume-a.volume).slice(0,8),[visible]);
   const volumeSpikes=useMemo(()=>[...visible].filter(s=>(s.volumeAcceleration??0)>0||(s.relativeVolume??0)>1).sort((a,b)=>(b.volumeAcceleration??b.relativeVolume??0)-(a.volumeAcceleration??a.relativeVolume??0)).slice(0,8),[visible]);
   const dollarLeaders=useMemo(()=>[...visible].sort((a,b)=>b.dollarVolume-a.dollarVolume).slice(0,8),[visible]);
@@ -37,10 +58,10 @@ export function MultiScannerDashboard({stocks,status,newsArticles,ukTime,etTime,
     <button className="ms-row" key={s.symbol} onClick={()=>setSelected(s.symbol)}>
       <span className="ms-rank">{i+1}</span><span className="ms-symbol">{s.symbol}<small>{s.name||'US equity'}</small></span>
       <span>{money(s.price)}</span><span className={positive(mode==='gap'?gapPct(s):s.dailyChange)?'up':'down'}>{pct(mode==='gap'?gapPct(s):s.dailyChange)}</span>
-      <span className={positive(s.oneMinuteChange)?'up':s.oneMinuteChange!=null?'down':''}>{pct(s.oneMinuteChange)}</span>
-      <span className={positive(s.twoMinuteChange)?'up':s.twoMinuteChange!=null?'down':''}>{pct(s.twoMinuteChange)}</span>
-      <span className={positive(s.fiveMinuteChange)?'up':s.fiveMinuteChange!=null?'down':''}>{pct(s.fiveMinuteChange)}</span>
-      <span>{vol(s.volume)}</span><span>{s.relativeVolume?s.relativeVolume.toFixed(2)+'x':'—'}</span><span>{dollarVol(s.dollarVolume)}</span><span>{mode==='high'?pct(s.distanceFromHigh):s.score}</span>
+      <span className={s.oneMinuteChange==null?'warming':positive(s.oneMinuteChange)?'up':'down'}>{pct(s.oneMinuteChange)}</span>
+      <span className={s.twoMinuteChange==null?'warming':positive(s.twoMinuteChange)?'up':'down'}>{pct(s.twoMinuteChange)}</span>
+      <span className={s.fiveMinuteChange==null?'warming':positive(s.fiveMinuteChange)?'up':'down'}>{pct(s.fiveMinuteChange)}</span>
+      <span>{vol(s.volume)}</span><span>{s.relativeVolume!=null?s.relativeVolume.toFixed(2)+'x':'—'}</span><span>{dollarVol(s.dollarVolume)}</span><span>{mode==='high'?pct(s.distanceFromHigh):momentumScore(s)}</span>
     </button>
   );
 
