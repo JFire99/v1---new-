@@ -20,6 +20,8 @@ export default function App() {
   const [newsStatus, setNewsStatus] = useState<any>({ connected: false, totalArticles: 0, trackedSymbolsWithNews: 0, lastArticleTime: null });
   const [ukTime, setUkTime] = useState('');
   const [etTime, setEtTime] = useState('');
+  const [newsRefreshing, setNewsRefreshing] = useState(false);
+  const [lastNewsRefresh, setLastNewsRefresh] = useState<Date | null>(null);
 
   useEffect(() => {
     const tick = () => {
@@ -34,6 +36,22 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const refreshNews = async () => {
+      setNewsRefreshing(true);
+      try {
+        const response = await fetch('/api/news?limit=200&refresh=1', { cache: 'no-store' });
+        if (response.ok) {
+          const data = await response.json();
+          const articles = Array.isArray(data?.articles) ? data.articles : Array.isArray(data) ? data : null;
+          if (articles) setNewsArticles(articles);
+        }
+      } catch {}
+      setLastNewsRefresh(new Date());
+      window.setTimeout(() => setNewsRefreshing(false), 900);
+    };
+    refreshNews();
+    const newsTimer = window.setInterval(refreshNews, 180000);
+
     fetch('/api/status').then(r => r.json()).then(data => {
       if (data && typeof data === 'object') setStatus(prev => ({ ...prev, ...data }));
     }).catch(() => {});
@@ -68,8 +86,8 @@ export default function App() {
         }
       } catch {}
     };
-    return () => stream.close();
+    return () => { stream.close(); window.clearInterval(newsTimer); };
   }, []);
 
-  return <MultiScannerDashboard stocks={stocks} status={status} newsArticles={newsArticles} newsStatus={newsStatus} ukTime={ukTime} etTime={etTime} />;
+  return <MultiScannerDashboard stocks={stocks} status={status} newsArticles={newsArticles} newsStatus={newsStatus} ukTime={ukTime} etTime={etTime} newsRefreshing={newsRefreshing} lastNewsRefresh={lastNewsRefresh} />;
 }
