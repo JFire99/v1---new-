@@ -38,6 +38,7 @@ export interface StockData {
   relativeVolume: number | null;
   volumeAcceleration?: number | null;
   minuteVolume?: number | null;
+  dayOpen: number | null;
   dayHigh: number;
   distanceFromHigh: number | null;
   score: number;
