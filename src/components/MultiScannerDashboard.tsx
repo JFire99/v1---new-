@@ -11,7 +11,7 @@ const pct=(n:number|null|undefined)=>n==null||!Number.isFinite(n)?'—':(n>=0?'+
 const vol=(n:number)=>n>=1000000?(n/1000000).toFixed(1)+'M':n>=1000?(n/1000).toFixed(0)+'K':String(Math.round(n));
 const positive=(n:number|null|undefined)=>n!=null&&n>0;
 const shortMomo=(s:StockData)=>s.twoMinuteChange??((s.oneMinuteChange??0)*0.6+(s.fiveMinuteChange??0)*0.4);
-const hasHigh=(s:StockData)=>s.distanceFromHigh!=null&&s.distanceFromHigh<=0.05;
+const hasHigh=(s:StockData)=>s.distanceFromHigh!=null&&s.distanceFromHigh<=0.01;
 const gapPct=(s:StockData)=>s.dayOpen!=null&&s.previousClose!=null&&s.previousClose>0?((s.dayOpen-s.previousClose)/s.previousClose)*100:null;
 
 export function MultiScannerDashboard({stocks,status,newsArticles,ukTime,etTime}:Props){
@@ -19,10 +19,10 @@ export function MultiScannerDashboard({stocks,status,newsArticles,ukTime,etTime}
   const [panel,setPanel]=useState<'all'|'up'|'down'|'gap'|'high'|'news'>('all');
   const [query,setQuery]=useState('');
   const visible=useMemo(()=>{const q=query.trim().toUpperCase();return stocks.filter(s=>!q||s.symbol.includes(q)||(s.name||'').toUpperCase().includes(q));},[stocks,query]);
-  const momo=useMemo(()=>[...visible].sort((a,b)=>shortMomo(b)-shortMomo(a)||b.score-a.score).slice(0,12),[visible]);
+  const momo=useMemo(()=>[...visible].filter(s=>s.distanceFromHigh!=null&&s.distanceFromHigh<=0.02).sort((a,b)=>shortMomo(b)-shortMomo(a)||b.score-a.score).slice(0,12),[visible]);
   const up=useMemo(()=>momo.filter(s=>shortMomo(s)>0).slice(0,8),[momo]);
   const down=useMemo(()=>[...visible].filter(s=>shortMomo(s)<0).sort((a,b)=>shortMomo(a)-shortMomo(b)).slice(0,8),[visible]);
-  const gaps=useMemo(()=>[...visible].filter(s=>gapPct(s)!=null).sort((a,b)=>(gapPct(b)??-999)-(gapPct(a)??-999)).slice(0,8),[visible]);
+  const gaps=useMemo(()=>[...visible].filter(s=>(gapPct(s)??-999)>0).sort((a,b)=>(gapPct(b)??-999)-(gapPct(a)??-999)).slice(0,8),[visible]);
   const highs=useMemo(()=>[...visible].filter(hasHigh).sort((a,b)=>(b.oneMinuteChange??-999)-(a.oneMinuteChange??-999)).slice(0,8),[visible]);
   const stale=useMemo(()=>[...visible].filter(s=>s.halted||s.freshness==='STALE').slice(0,8),[visible]);
   const news=useMemo(()=>newsArticles.slice(0,12),[newsArticles]);
@@ -82,5 +82,5 @@ export function MultiScannerDashboard({stocks,status,newsArticles,ukTime,etTime}
 }
 function PanelHead({title,count,icon}:{title:string;count:number;icon?:ReactNode}){return <div className="ms-panel-head"><div>{icon||<Activity size={13}/>}<strong>{title}</strong></div><span>{count}</span></div>}
 function TableHead({mode}:{mode:string}){return <div className="ms-table-head"><span>#</span><span>NAME</span><span>PRICE</span><span>DAY</span><span>1M</span><span>2M</span><span>5M</span><span>RVOL</span><span>{mode==='high'?'HOD':'SCORE'}</span></div>}
-function MiniList({items,up,high,stale,gap,onSelect}:{items:StockData[];up?:boolean;high?:boolean;stale?:boolean;gap?:boolean;onSelect:(s:string)=>void}){return <div className="mini-list">{items.map(s=><button key={s.symbol} onClick={()=>onSelect(s.symbol)}><b>{s.symbol}</b><span>{money(s.price)}</span><em className={up?'up':stale?'muted':(s.oneMinuteChange??0)<0?'down':'up'}>{high?'NEW HIGH':s.halted?'HALTED':stale?'NO RECENT TICK':pct(gap?gapPct(s):up?s.twoMinuteChange:s.dailyChange)}</em><small>{vol(s.volume)} · {s.relativeVolume?s.relativeVolume.toFixed(1)+'x RVOL':'RVOL —'}</small></button>)}</div>}
+function MiniList({items,up,high,stale,gap,onSelect}:{items:StockData[];up?:boolean;high?:boolean;stale?:boolean;gap?:boolean;onSelect:(s:string)=>void}){return <div className="mini-list">{items.map(s=><button key={s.symbol} onClick={()=>onSelect(s.symbol)}><b>{s.symbol}</b><span>{money(s.price)}</span><em className={up?'up':stale?'muted':(s.twoMinuteChange??s.oneMinuteChange??0)<0?'down':'up'}>{high?'NEW HIGH':s.halted?'HALTED':stale?'NO RECENT TICK':pct(gap?gapPct(s):s.twoMinuteChange)}</em><small>{vol(s.volume)} · {s.relativeVolume?s.relativeVolume.toFixed(1)+'x RVOL':'RVOL —'}</small></button>)}</div>}
 function NewsList({articles,onSelect}:{articles:NewsArticle[];onSelect:(s:string)=>void}){return <div className="news-list">{articles.map(a=><button key={a.id} onClick={()=>a.symbols?.[0]&&onSelect(a.symbols[0])}><time>{new Date(a.createdAt||Date.now()).toLocaleTimeString('en-GB',{hour12:false,hour:'2-digit',minute:'2-digit'})}</time><strong>{a.symbols?.slice(0,2).join(', ')||'MARKET'}</strong><span>{a.headline}</span></button>)}</div>}
