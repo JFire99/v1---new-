@@ -10,7 +10,7 @@ const money=(n:number)=>n>0?'$'+(n<1?n.toFixed(4):n.toFixed(2)):'—';
 const pct=(n:number|null|undefined)=>n==null||!Number.isFinite(n)?'—':(n>=0?'+':'')+n.toFixed(2)+'%';
 const vol=(n:number)=>n>=1000000?(n/1000000).toFixed(1)+'M':n>=1000?(n/1000).toFixed(0)+'K':String(Math.round(n));
 const positive=(n:number|null|undefined)=>n!=null&&n>0;
-const shortMomo=(s:StockData)=>((s.oneMinuteChange??0)*0.6+(s.fiveMinuteChange??0)*0.4);
+const shortMomo=(s:StockData)=>s.twoMinuteChange??((s.oneMinuteChange??0)*0.6+(s.fiveMinuteChange??0)*0.4);
 const hasHigh=(s:StockData)=>s.distanceFromHigh!=null&&s.distanceFromHigh<=0.05;
 
 export function MultiScannerDashboard({stocks,status,newsArticles,ukTime,etTime}:Props){
@@ -23,7 +23,7 @@ export function MultiScannerDashboard({stocks,status,newsArticles,ukTime,etTime}
   const down=useMemo(()=>[...visible].filter(s=>shortMomo(s)<0).sort((a,b)=>shortMomo(a)-shortMomo(b)).slice(0,8),[visible]);
   const gaps=useMemo(()=>[...visible].sort((a,b)=>(b.dailyChange??-999)-(a.dailyChange??-999)).slice(0,8),[visible]);
   const highs=useMemo(()=>[...visible].filter(hasHigh).sort((a,b)=>(b.oneMinuteChange??-999)-(a.oneMinuteChange??-999)).slice(0,8),[visible]);
-  const stale=useMemo(()=>[...visible].filter(s=>s.freshness==='STALE').slice(0,8),[visible]);
+  const stale=useMemo(()=>[...visible].filter(s=>s.halted||s.freshness==='STALE').slice(0,8),[visible]);
   const news=useMemo(()=>newsArticles.slice(0,12),[newsArticles]);
   const active=selected?stocks.find(s=>s.symbol===selected)||null:null;
   const activeNews=selected?newsArticles.filter(a=>a.symbols?.some(x=>x.toUpperCase()===selected.toUpperCase())):[];
@@ -80,6 +80,6 @@ export function MultiScannerDashboard({stocks,status,newsArticles,ukTime,etTime}
   </div>;
 }
 function PanelHead({title,count,icon}:{title:string;count:number;icon?:ReactNode}){return <div className="ms-panel-head"><div>{icon||<Activity size={13}/>}<strong>{title}</strong></div><span>{count}</span></div>}
-function TableHead({mode}:{mode:string}){return <div className="ms-table-head"><span>#</span><span>NAME</span><span>PRICE</span><span>DAY</span><span>1M</span><span>5M</span><span>RVOL</span><span>{mode==='high'?'HOD':'SCORE'}</span></div>}
-function MiniList({items,up,high,stale,onSelect}:{items:StockData[];up?:boolean;high?:boolean;stale?:boolean;onSelect:(s:string)=>void}){return <div className="mini-list">{items.map(s=><button key={s.symbol} onClick={()=>onSelect(s.symbol)}><b>{s.symbol}</b><span>{money(s.price)}</span><em className={up?'up':stale?'muted':(s.oneMinuteChange??0)<0?'down':'up'}>{high?'NEW HIGH':stale?'NO RECENT TICK':pct(up?s.oneMinuteChange:s.dailyChange)}</em><small>{vol(s.volume)} · {s.relativeVolume?s.relativeVolume.toFixed(1)+'x RVOL':'RVOL —'}</small></button>)}</div>}
+function TableHead({mode}:{mode:string}){return <div className="ms-table-head"><span>#</span><span>NAME</span><span>PRICE</span><span>DAY</span><span>1M</span><span>2M</span><span>5M</span><span>RVOL</span><span>{mode==='high'?'HOD':'SCORE'}</span></div>}
+function MiniList({items,up,high,stale,onSelect}:{items:StockData[];up?:boolean;high?:boolean;stale?:boolean;onSelect:(s:string)=>void}){return <div className="mini-list">{items.map(s=><button key={s.symbol} onClick={()=>onSelect(s.symbol)}><b>{s.symbol}</b><span>{money(s.price)}</span><em className={up?'up':stale?'muted':(s.oneMinuteChange??0)<0?'down':'up'}>{high?'NEW HIGH':s.halted?'HALTED':stale?'NO RECENT TICK':pct(up?s.twoMinuteChange:s.dailyChange)}</em><small>{vol(s.volume)} · {s.relativeVolume?s.relativeVolume.toFixed(1)+'x RVOL':'RVOL —'}</small></button>)}</div>}
 function NewsList({articles,onSelect}:{articles:NewsArticle[];onSelect:(s:string)=>void}){return <div className="news-list">{articles.map(a=><button key={a.id} onClick={()=>a.symbols?.[0]&&onSelect(a.symbols[0])}><time>{new Date(a.createdAt||Date.now()).toLocaleTimeString('en-GB',{hour12:false,hour:'2-digit',minute:'2-digit'})}</time><strong>{a.symbols?.slice(0,2).join(', ')||'MARKET'}</strong><span>{a.headline}</span></button>)}</div>}
