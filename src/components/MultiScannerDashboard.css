@@ -103,3 +103,10 @@
     padding:0 6px;
   }
 }
+
+
+/* Momentum data-state styling */
+.ms-row > span.warming{color:#7890a4;font-weight:700;font-size:12px;letter-spacing:.03em}
+.ms-row > span:nth-child(11){font-weight:900;color:#bfe3ff}
+.ms-row > span:nth-child(11)::before{content:''}
+.mini-list em.neutral{color:#9fc9ee}
