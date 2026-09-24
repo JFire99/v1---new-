@@ -38,6 +38,7 @@ export function MultiScannerDashboard({stocks,status,newsArticles,ukTime,etTime}
       <span className="ms-rank">{i+1}</span><span className="ms-symbol">{s.symbol}<small>{s.name||'US equity'}</small></span>
       <span>{money(s.price)}</span><span className={positive(mode==='gap'?gapPct(s):s.dailyChange)?'up':'down'}>{pct(mode==='gap'?gapPct(s):s.dailyChange)}</span>
       <span className={positive(s.oneMinuteChange)?'up':s.oneMinuteChange!=null?'down':''}>{pct(s.oneMinuteChange)}</span>
+      <span className={positive(s.twoMinuteChange)?'up':s.twoMinuteChange!=null?'down':''}>{pct(s.twoMinuteChange)}</span>
       <span className={positive(s.fiveMinuteChange)?'up':s.fiveMinuteChange!=null?'down':''}>{pct(s.fiveMinuteChange)}</span>
       <span>{vol(s.volume)}</span><span>{s.relativeVolume?s.relativeVolume.toFixed(2)+'x':'—'}</span><span>{dollarVol(s.dollarVolume)}</span><span>{mode==='high'?pct(s.distanceFromHigh):s.score}</span>
     </button>
@@ -73,16 +74,24 @@ export function MultiScannerDashboard({stocks,status,newsArticles,ukTime,etTime}
         <section className="ms-panel"><PanelHead title="2 MIN MOMO DOWN" icon={<ArrowDown size={13}/>} count={down.length}/><MiniList items={down} onSelect={setSelected}/></section>
         <section className="ms-panel"><PanelHead title="NEW HIGH SCANNER" icon={<Bell size={13}/>} count={highs.length}/><MiniList items={highs} high onSelect={setSelected}/></section>
         <section className="ms-panel"><PanelHead title="GAP UP / RUNNERS" icon={<TrendingUp size={13}/>} count={gaps.length}/><MiniList items={gaps} gap onSelect={setSelected}/></section>
+      </aside>
+      <div className="ms-middle">
+        <section className="ms-panel ms-news"><PanelHead title="LIVE NEWS" count={news.length}/><NewsList articles={news.slice(0,12)} onSelect={setSelected}/></section>
+        <section className="ms-chart">
+          <div className="chart-top"><div><strong>{active?.symbol||momo[0]?.symbol||'—'}</strong><span>{active?.name||'Select a scanner row to focus the stock'}</span></div><div>{active?money(active.price):'—'} <em className={positive(active?.dailyChange)?'up':'down'}>{active?pct(active.dailyChange):'—'}</em></div></div>
+          <div className="fake-chart">{active?<><div className="chart-watermark">{active.symbol}</div><div className="chart-line">{Array.from({length:48},(_,i)=><i key={i} style={{height:(18+Math.abs(Math.sin(i/4))*45+(i>38?(i-38)*2:0))+'%'}}/>)}</div><div className="chart-axis"><span>5M {pct(active.fiveMinuteChange)}</span><span>1M {pct(active.oneMinuteChange)}</span><span>HOD {money(active.dayHigh)}</span><span>RVOL {active.relativeVolume?active.relativeVolume.toFixed(2)+'x':'—'}</span></div></>:<div className="chart-empty">Click a stock above to focus it.</div>}</div>
+        </section>
+      </div>
+        <div className="chart-top"><div><strong>{active?.symbol||momo[0]?.symbol||'—'}</strong><span>{active?.name||'Select a scanner row to focus the stock'}</span></div><div>{active?money(active.price):'—'} <em className={positive(active?.dailyChange)?'up':'down'}>{active?pct(active.dailyChange):'—'}</em></div></div>
+        <div className="fake-chart">{active?<><div className="chart-watermark">{active.symbol}</div><div className="chart-line">{Array.from({length:48},(_,i)=><i key={i} style={{height:(18+Math.abs(Math.sin(i/4))*45+(i>38?(i-38)*2:0))+'%'}}/>)}</div><div className="chart-axis"><span>5M {pct(active.fiveMinuteChange)}</span><span>1M {pct(active.oneMinuteChange)}</span><span>HOD {money(active.dayHigh)}</span><span>RVOL {active.relativeVolume?active.relativeVolume.toFixed(2)+'x':'—'}</span></div></>:<div className="chart-empty">Click a stock above to focus it.</div>}</div>
+      </section>
+      <div className="ms-bottom">
         <section className="ms-panel"><PanelHead title="VOLUME LEADERS" icon={<Activity size={13}/>} count={volumeLeaders.length}/><MiniList items={volumeLeaders} volume onSelect={setSelected}/></section>
         <section className="ms-panel"><PanelHead title="VOLUME SPIKES" icon={<Flame size={13}/>} count={volumeSpikes.length}/><MiniList items={volumeSpikes} volumeSpike onSelect={setSelected}/></section>
         <section className="ms-panel"><PanelHead title="DOLLAR VOLUME" icon={<TrendingUp size={13}/>} count={dollarLeaders.length}/><MiniList items={dollarLeaders} dollar onSelect={setSelected}/></section>
         <section className="ms-panel"><PanelHead title="HALT / STALE WATCH" icon={<Wifi size={13}/>} count={stale.length}/><MiniList items={stale} stale onSelect={setSelected}/></section>
-      </aside>
-      <section className="ms-chart">
-        <div className="chart-top"><div><strong>{active?.symbol||momo[0]?.symbol||'—'}</strong><span>{active?.name||'Select a scanner row to focus the stock'}</span></div><div>{active?money(active.price):'—'} <em className={positive(active?.dailyChange)?'up':'down'}>{active?pct(active.dailyChange):'—'}</em></div></div>
-        <div className="fake-chart">{active?<><div className="chart-watermark">{active.symbol}</div><div className="chart-line">{Array.from({length:48},(_,i)=><i key={i} style={{height:(18+Math.abs(Math.sin(i/4))*45+(i>38?(i-38)*2:0))+'%'}}/>)}</div><div className="chart-axis"><span>5M {pct(active.fiveMinuteChange)}</span><span>1M {pct(active.oneMinuteChange)}</span><span>HOD {money(active.dayHigh)}</span><span>RVOL {active.relativeVolume?active.relativeVolume.toFixed(2)+'x':'—'}</span></div></>:<div className="chart-empty">Click a stock above to focus it.</div>}</div>
-      </section>
-      
+      </div>
+          
     </div>
     <footer className="ms-footer"><span>REAL MARKET DATA ONLY</span><span>{status.universeSize.toLocaleString()} common stocks · {status.stocksTracked.toLocaleString()} tracked · {status.monitoredSymbols.toLocaleString()} live symbols</span><span>Last feed: {status.diagnostics?.wsLastMessageTime?new Date(status.diagnostics.wsLastMessageTime).toLocaleTimeString('en-GB',{hour12:false}):'—'}</span></footer>
     <StockDetailDrawer symbol={selected} onClose={()=>setSelected(null)} stock={active} newsArticles={activeNews} getSignalClass={()=>'signal-building'} getFreshnessConfig={(f)=>({label:f||'LIVE',icon:'●',className:'freshness-live',title:'Live data'})} getTriggerClass={()=>''}/>
