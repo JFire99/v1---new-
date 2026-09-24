@@ -7,7 +7,7 @@ import './MultiScannerDashboard.css';
 
 type Props = { stocks: StockData[]; status: ScannerStatus; newsArticles: NewsArticle[]; newsStatus: any; ukTime: string; etTime: string; newsRefreshing: boolean; lastNewsRefresh: Date | null; };
 const money=(n:number)=>n>0?'$'+(n<1?n.toFixed(4):n.toFixed(2)):'—';
-const pct=(n:number|null|undefined)=>n==null||!Number.isFinite(n)?'WARM':(n>=0?'+':'')+n.toFixed(2)+'%';
+const pct=(n:number|null|undefined)=>n==null||!Number.isFinite(n)?'—':(n>=0?'+':'')+n.toFixed(2)+'%';
 const vol=(n:number)=>n>=1000000000?(n/1000000000).toFixed(2)+'B':n>=1000000?(n/1000000).toFixed(1)+'M':n>=1000?(n/1000).toFixed(0)+'K':String(Math.round(n));
 const dollarVol=(n:number)=>n>=1000000000?'$'+(n/1000000000).toFixed(2)+'B':n>=1000000?'$'+(n/1000000).toFixed(1)+'M':n>=1000?'$'+(n/1000).toFixed(0)+'K':'$'+Math.round(n);
 const positive=(n:number|null|undefined)=>n!=null&&n>0;
@@ -28,12 +28,12 @@ function staleSeconds(s:StockData){
   return Number.isFinite(t)?Math.max(0,(Date.now()-t)/1000):null;
 }
 function staleLabel(s:StockData){
-  if(s.halted)return 'HALTED';
+  if(s.halted)return s.haltReason?`HALTED · ${s.haltReason}`:'HALTED';
   const age=staleSeconds(s);
-  if(age!=null&&age>=300)return 'STALE >5M';
-  if(age!=null&&age>=60)return 'STALE '+Math.round(age)+'s';
-  if(age!=null)return 'NO TICK '+Math.round(age)+'s';
-  return 'STALE';
+  if(age==null)return 'STALE';
+  if(age>=300)return `STALE · ${Math.floor(age/60)}m ${Math.floor(age%60)}s`;
+  if(age>=60)return `STALE · ${Math.floor(age/60)}m ${Math.floor(age%60)}s`;
+  return `NO TICK · ${Math.max(1,Math.floor(age))}s`;
 }
 
 export function MultiScannerDashboard({stocks,status,newsArticles,ukTime,etTime,newsRefreshing,lastNewsRefresh}:Props){
@@ -46,7 +46,7 @@ export function MultiScannerDashboard({stocks,status,newsArticles,ukTime,etTime,
   const down=useMemo(()=>[...visible].filter(s=>shortMomo(s)<=-0.10&&((s.twoMinuteChange??0)<=-0.20||(s.oneMinuteChange??0)<=-0.10||(s.fiveMinuteChange??0)<=-0.50)).sort((a,b)=>momentumScore(a)-momentumScore(b)).slice(0,8),[visible]);
   const gaps=useMemo(()=>[...visible].filter(s=>(gapPct(s)??-999)>0).sort((a,b)=>(gapPct(b)??-999)-(gapPct(a)??-999)).slice(0,8),[visible]);
   const highs=useMemo(()=>[...visible].filter(hasHigh).sort((a,b)=>momentumScore(b)-momentumScore(a)).slice(0,8),[visible]);
-  const stale=useMemo(()=>[...visible].filter(s=>s.halted||s.freshness==='STALE'||(staleSeconds(s)??0)>=30).sort((a,b)=>(staleSeconds(b)??0)-(staleSeconds(a)??0)).slice(0,8),[visible]);
+  const stale=useMemo(()=>[...visible].filter(s=>s.halted||s.freshness==='STALE'||(staleSeconds(s)??0)>=30).sort((a,b)=>{if(a.halted!==b.halted)return a.halted?-1:1;return (staleSeconds(b)??0)-(staleSeconds(a)??0)}).slice(0,8),[visible]);
   const volumeLeaders=useMemo(()=>[...visible].sort((a,b)=>b.volume-a.volume).slice(0,8),[visible]);
   const volumeSpikes=useMemo(()=>[...visible].filter(s=>(s.volumeAcceleration??0)>0||(s.relativeVolume??0)>1).sort((a,b)=>(b.volumeAcceleration??b.relativeVolume??0)-(a.volumeAcceleration??a.relativeVolume??0)).slice(0,8),[visible]);
   const dollarLeaders=useMemo(()=>[...visible].sort((a,b)=>b.dollarVolume-a.dollarVolume).slice(0,8),[visible]);
@@ -112,5 +112,5 @@ export function MultiScannerDashboard({stocks,status,newsArticles,ukTime,etTime,
 }
 function PanelHead({title,count,icon}:{title:string;count:number;icon?:ReactNode}){return <div className="ms-panel-head"><div>{icon||<Activity size={13}/>}<strong>{title}</strong></div><span>{count}</span></div>}
 function TableHead({mode}:{mode:string}){return <div className="ms-table-head"><span>#</span><span>NAME</span><span>PRICE</span><span>DAY</span><span>1M</span><span>2M</span><span>5M</span><span>VOL</span><span>RVOL</span><span>$VOL</span><span>{mode==='high'?'HOD':'SCORE'}</span></div>}
-function MiniList({items,up,high,stale,gap,volume,volumeSpike,dollar,onSelect}:{items:StockData[];up?:boolean;high?:boolean;stale?:boolean;gap?:boolean;volume?:boolean;volumeSpike?:boolean;dollar?:boolean;onSelect:(s:string)=>void}){return <div className="mini-list">{items.map(s=>{const spike=s.volumeAcceleration??s.relativeVolume??0;const change=gap?gapPct(s):s.twoMinuteChange;return <button key={s.symbol} onClick={()=>onSelect(s.symbol)}><b>{s.symbol}</b><span>{money(s.price)}</span><em className={high||volume||volumeSpike||dollar?'neutral':up?'up':stale?'muted':(change??0)<0?'down':'up'}>{high?'NEW HIGH':s.halted?'HALTED':stale?'NO RECENT TICK':volume?vol(s.volume):volumeSpike?spike.toFixed(1)+'x':dollar?dollarVol(s.dollarVolume):pct(change)}</em><small>{volume?'SESSION VOL':volumeSpike?'SPIKE · '+vol(s.volume):dollar?'DOLLAR VOL · '+vol(s.volume):vol(s.volume)+' · '+(s.relativeVolume?s.relativeVolume.toFixed(1)+'x RVOL':'RVOL —')}</small></button>})}</div>}
+function MiniList({items,up,high,stale,gap,volume,volumeSpike,dollar,onSelect}:{items:StockData[];up?:boolean;high?:boolean;stale?:boolean;gap?:boolean;volume?:boolean;volumeSpike?:boolean;dollar?:boolean;onSelect:(s:string)=>void}){return <div className="mini-list">{items.map(s=>{const spike=s.volumeAcceleration??s.relativeVolume??0;const change=gap?gapPct(s):s.twoMinuteChange;return <button key={s.symbol} onClick={()=>onSelect(s.symbol)}><b>{s.symbol}</b><span>{money(s.price)}</span><em className={high||volume||volumeSpike||dollar?'neutral':up?'up':stale?'muted':(change??0)<0?'down':'up'}>{high?'NEW HIGH':s.halted?'HALTED':stale?staleLabel(s):volume?vol(s.volume):volumeSpike?spike.toFixed(1)+'x':dollar?dollarVol(s.dollarVolume):pct(change)}</em><small>{volume?'SESSION VOL':volumeSpike?'SPIKE · '+vol(s.volume):dollar?'DOLLAR VOL · '+vol(s.volume):vol(s.volume)+' · '+(s.relativeVolume?s.relativeVolume.toFixed(1)+'x RVOL':'RVOL —')}</small></button>})}</div>}
 function NewsList({articles,onSelect}:{articles:NewsArticle[];onSelect:(s:string)=>void}){return <div className="news-list">{articles.map(a=><button key={a.id} onClick={()=>a.symbols?.[0]&&onSelect(a.symbols[0])}><time>{new Date(a.createdAt||Date.now()).toLocaleTimeString('en-GB',{hour12:false,hour:'2-digit',minute:'2-digit'})}</time><strong>{a.symbols?.slice(0,2).join(', ')||'MARKET'}</strong><span>{a.headline}</span></button>)}</div>}
