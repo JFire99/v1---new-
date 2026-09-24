@@ -30,6 +30,7 @@ export interface StockData {
   previousClose: number | null;
   dailyChange: number | null;
   oneMinuteChange: number | null;
+  twoMinuteChange: number | null;
   fiveMinuteChange: number | null;
   volume: number;
   dollarVolume: number;
@@ -46,6 +47,9 @@ export interface StockData {
   newsCount?: number;
   hasRecentNews?: boolean;
   lastUpdate: string;
+  halted?: boolean;
+  haltReason?: string | null;
+  haltUpdatedAt?: string | null;
 }
 
 export interface LivePricePoint {
